@@ -1,0 +1,21 @@
+## Interface: 120000 120001 120005
+## Title: Gear Inventory
+## Notes: Track and compare gear across all your characters
+## Author:
+## Version: 1.0.0
+## SavedVariables: GearInventoryDB
+
+## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, Bazooka, SexyMap
+
+## X-NOTE: Verify Interface version via: /dump select(4, GetBuildInfo())
+## X-NOTE: This folder must be named "GearInventory" in Interface/AddOns/
+
+Addons/core.lua
+Locales/enUS.lua
+Addons/main.lua
+Options/config.lua
+Addons/libs.lua
+Addons/ui.lua
+Addons/broker.lua
+Addons/minimap.lua
+Options/panel.lua
