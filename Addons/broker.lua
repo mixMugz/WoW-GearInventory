@@ -28,7 +28,7 @@ end
 
 GI.brokerObj = GI.ldb:NewDataObject("GearInventory", {
   type  = "launcher",
-  label = "Gear Inventory",
+  label = "GearInventory",
   icon  = "Interface\\Icons\\INV_Misc_Gear_01",
   text  = "?",
 

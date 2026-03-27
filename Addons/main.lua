@@ -234,6 +234,7 @@ local function ScanCharacterGear(isLoginScan)
   local _, class          = UnitClass("player")
   local _, raceFile       = UnitRace("player")
   local sex               = UnitSex("player")
+  local faction           = UnitFactionGroup("player")
 
   local d = GI.db.characters[key]
   if not d then
@@ -243,6 +244,7 @@ local function ScanCharacterGear(isLoginScan)
       class      = class,
       raceFile   = raceFile,
       sex        = sex,
+      faction    = faction,
       level      = 0,
       gear       = {},
       avgIlvl    = 0,
@@ -256,6 +258,7 @@ local function ScanCharacterGear(isLoginScan)
   d.class      = class
   d.raceFile   = raceFile
   d.sex        = sex
+  d.faction    = faction
   d.level      = UnitLevel("player")
   d.lastUpdate = time()
 
@@ -283,12 +286,17 @@ local function ScanCharacterGear(isLoginScan)
         end
         effectiveIlvl = effectiveIlvl or ilvl or 0
 
+        local prevSlot = d.gear[slot.id]
+        local prevQ = prevSlot and prevSlot.id == itemID and prevSlot.quality or nil
+        local finalQ = math.max(quality or 0, prevQ or 0)
+        if finalQ == 0 then finalQ = 1 end
+
         d.gear[slot.id] = {
           id      = itemID,
           link    = itemLink,
           name    = name,
           ilvl    = effectiveIlvl,
-          quality = quality or 1,
+          quality = finalQ,
           icon    = C_Item.GetItemIconByID(itemID),
           cached  = true,
         }
@@ -303,7 +311,7 @@ local function ScanCharacterGear(isLoginScan)
           link    = itemLink,
           name    = L["ITEM_LOADING"],
           ilvl    = (d.gear[slot.id] and d.gear[slot.id].ilvl) or 0,
-          quality = 1,
+          quality = (d.gear[slot.id] and d.gear[slot.id].quality) or 1,
           icon    = C_Item.GetItemIconByID(itemID),
           cached  = false,
         }
@@ -314,6 +322,8 @@ local function ScanCharacterGear(isLoginScan)
   end
 
   d.avgIlvl = FetchAvgIlvl() or d.avgIlvl or 0
+  local cr, cg, cb = GetItemLevelColor()
+  d.avgIlvlColor = { r = cr, g = cg, b = cb }
 
   if HasPending() then
     eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
@@ -400,9 +410,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
       return
     end
 
-    local name, link, quality, ilvl = C_Item.GetItemInfo(itemID)
+    -- Read slot data early to use stored link for quality resolution
+    local charData = GI.db and GI.db.characters[pending.charKey]
+    local slotData = charData and charData.gear[pending.slotID]
+    local lookupKey = (slotData and slotData.id == itemID and slotData.link) or itemID
+    local name, link, quality, ilvl = C_Item.GetItemInfo(lookupKey)
+    if not name then
+      name, link, quality, ilvl = C_Item.GetItemInfo(itemID)
+    end
     if name then
-      local charData = GI.db and GI.db.characters[pending.charKey]
       if charData then
         local slot = charData.gear[pending.slotID]
         if slot and slot.id == itemID then
@@ -423,12 +439,18 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
           slot.name    = name
           slot.link    = resolvedLink
-          slot.quality = quality or 1
+          -- Never downgrade quality: crafted items may return lower quality via itemID lookup
+          slot.quality = math.max(quality or 0, slot.quality or 0)
+          if slot.quality == 0 then slot.quality = 1 end
           slot.ilvl    = effectiveIlvl or ilvl or slot.ilvl or 0
           slot.icon    = C_Item.GetItemIconByID(itemID) or slot.icon
           slot.cached  = true
           local fresh = FetchAvgIlvl()
-          if fresh then charData.avgIlvl = fresh end
+          if fresh then
+            charData.avgIlvl = fresh
+            local cr, cg, cb = GetItemLevelColor()
+            charData.avgIlvlColor = { r = cr, g = cg, b = cb }
+          end
         end
       end
       pendingItems[itemID] = nil
@@ -465,8 +487,10 @@ end
 
 local _L = GI.L
 C_Timer.After(0.5, function()
-  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r " .. string.format(_L["LOADED_MSG"], GI.VERSION))
-  print("|cFFFFFF99  " .. _L["CMD_TOGGLE"] .. "|r")
-  print("|cFFFFFF99  " .. _L["CMD_OPTIONS"] .. "|r")
-  print("|cFFFFFF99  " .. _L["CMD_MINIMAP"] .. "|r")
+  print("|cFFFFFFFF---------|r")
+  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r |cFF888888" .. GI.VERSION .. "|r |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
+  print("    " .. string.format(_L["CMD_TOGGLE"],  _L["ACT_TOGGLE_WINDOW"]))
+  print("    " .. string.format(_L["CMD_OPTIONS"], _L["ACT_OPEN_SETTINGS"]))
+  print("    " .. string.format(_L["CMD_MINIMAP"], _L["ACT_TOGGLE_MINIMAP"]))
+  print("|cFFFFFFFF---------|r")
 end)

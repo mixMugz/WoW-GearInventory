@@ -8,10 +8,13 @@ local L = GI.L
 
 -- ─── Addon Lifecycle ──────────────────────────────────────────────────────────
 
-L["LOADED_MSG"]          = "v%s loaded"
-L["CMD_TOGGLE"]          = "/gi             \226\128\148 Open / Close"
-L["CMD_OPTIONS"]         = "/gi options     \226\128\148 Settings"
-L["CMD_MINIMAP"]         = "/gi minimap     \226\128\148 Toggle minimap button"
+L["LOADED_MSG"]          = "loaded."
+L["CMD_TOGGLE"]          = "|cFF00FF00/gi|r |cFFFFFFFF-|r |cFFFFD100%s|r"
+L["CMD_OPTIONS"]         = "|cFF00FF00/gi options|r |cFFFFFFFF-|r |cFFFFD100%s|r"
+L["CMD_MINIMAP"]         = "|cFF00FF00/gi minimap|r |cFFFFFFFF-|r |cFFFFD100%s|r"
+L["ACT_TOGGLE_WINDOW"]   = "Toggle main window"
+L["ACT_OPEN_SETTINGS"]   = "Open Settings"
+L["ACT_TOGGLE_MINIMAP"]  = "Toggle minimap icon"
 
 -- ─── Item States ──────────────────────────────────────────────────────────────
 
@@ -29,12 +32,31 @@ L["TIME_DAY"]            = "%dd ago"
 -- ─── Character Info Bar ───────────────────────────────────────────────────────
 
 L["CHAR_LEVEL"]          = "Level %d"
-L["CHAR_AVG_ILVL"]       = "Avg ilvl: %d"
+L["CHAR_AVG_ILVL"]       = "Avg ilvl: %s"
 
 -- ─── Character List Panel ─────────────────────────────────────────────────────
 
 L["PANEL_CHARACTERS"]    = "CHARACTERS"
 L["HINT_SELECT_CHAR"]    = "\226\134\144 Select a character"  -- ← arrow (UTF-8)
+
+-- ─── Equipment Slot Names ────────────────────────────────────────────────────
+
+L["SLOT_HEAD"]           = "Head"
+L["SLOT_NECK"]           = "Neck"
+L["SLOT_SHOULDER"]       = "Shoulder"
+L["SLOT_BACK"]           = "Back"
+L["SLOT_CHEST"]          = "Chest"
+L["SLOT_WRIST"]          = "Wrist"
+L["SLOT_HANDS"]          = "Hands"
+L["SLOT_WAIST"]          = "Waist"
+L["SLOT_LEGS"]           = "Legs"
+L["SLOT_FEET"]           = "Feet"
+L["SLOT_FINGER1"]        = "Finger 1"
+L["SLOT_FINGER2"]        = "Finger 2"
+L["SLOT_TRINKET1"]       = "Trinket 1"
+L["SLOT_TRINKET2"]       = "Trinket 2"
+L["SLOT_MAINHAND"]       = "Main Hand"
+L["SLOT_OFFHAND"]        = "Off Hand"
 
 -- ─── Gear Table Column Headers ────────────────────────────────────────────────
 
@@ -53,9 +75,10 @@ L["DELETE_CONFIRM"]      = "Delete |cFFFF6666%s|r from Gear Inventory?"
 
 -- ─── Tooltip Hints ────────────────────────────────────────────────────────────
 
-L["TIP_CLICK"]           = "[Click] Open / Close"
-L["TIP_RIGHT_CLICK"]     = "[Right-Click] Settings"
-L["TIP_DRAG"]            = "[Drag]  Reposition"
+L["TIP_CLICK"]              = "Left Click:"
+L["TIP_RIGHT_CLICK"]        = "Right Click:"
+L["TIP_DRAG"]               = "Drag:"
+L["ACT_REPOSITION"]         = "Reposition Button"
 
 -- ─── Minimap Toggle Output ────────────────────────────────────────────────────
 
@@ -65,7 +88,7 @@ L["MINIMAP_SHOWN"]       = "|cFF44FF44shown|r"
 
 -- ─── Options Panel ────────────────────────────────────────────────────────────
 
-L["OPT_PANEL_NAME"]      = "Gear Inventory"
+
 L["OPT_GENERAL"]         = "General"
 L["OPT_AUTO_SELECT"]     = "Auto-select current character on open"
 L["OPT_SORT_BY"]         = "Sort characters by"

@@ -1,8 +1,9 @@
 ## Interface: 120000 120001 120005
-## Title: Gear Inventory
-## Notes: Track and compare gear across all your characters
-## Author:
-## Version: 1.0.0
+## Title: |cFF00C9FFGear|r|cFFFFFFFFInventory|r
+## Notes: |cFF00FF00|nTrack and compare gear across all your characters|r
+## Author: mixMugz (a.k.a. Муади-Ревущийфьорд)
+## Category: Bags & Inventory
+## Version: |cFF888888 12.0.1#0002|r
 ## SavedVariables: GearInventoryDB
 
 ## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, Bazooka, SexyMap
@@ -15,6 +16,7 @@ Locales/enUS.lua
 Addons/main.lua
 Options/config.lua
 Addons/libs.lua
+Addons/ui-templates.xml
 Addons/ui.lua
 Addons/broker.lua
 Addons/minimap.lua

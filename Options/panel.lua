@@ -63,7 +63,7 @@ local panel -- created once, reused on every open
 
 local function BuildPanel()
   panel = CreateFrame("Frame")
-  panel.name = L["OPT_PANEL_NAME"]
+  panel.name = "GearInventory"
 
   -- Title
   local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")

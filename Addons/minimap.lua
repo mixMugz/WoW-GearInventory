@@ -50,6 +50,29 @@ local function SetupLibDBIcon()
   end
 
   GI.minimapIconID = "GearInventory"
+
+  -- Replace LibDBIcon tooltip with simplified version (no character list)
+  local mmBtn = GI.dbicon:GetMinimapButton("GearInventory")
+  if mmBtn then
+    mmBtn:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      GameTooltip:AddDoubleLine("|cFF00C9FFGear|r|cFFFFFFFFInventory|r", "|cFF555555v" .. GI.VERSION .. "|r")
+      local vFS = _G["GameTooltipTextRight1"]
+      if vFS then
+        local font, _, flags = vFS:GetFont()
+        vFS:SetFont(font, 9, flags)
+      end
+      GameTooltip:AddLine(" ")
+      GameTooltip:AddDoubleLine(L["TIP_CLICK"],       L["ACT_TOGGLE_WINDOW"], 1, 1, 1, 1, 0.82, 0)
+      GameTooltip:AddDoubleLine(L["TIP_RIGHT_CLICK"], L["ACT_OPEN_SETTINGS"], 1, 1, 1, 1, 0.82, 0)
+      GameTooltip:AddDoubleLine(L["TIP_DRAG"],        L["ACT_REPOSITION"],    1, 1, 1, 1, 0.82, 0)
+      GameTooltip:Show()
+    end)
+    mmBtn:SetScript("OnLeave", function()
+      GameTooltip:Hide()
+    end)
+  end
+
   return true
 end
 
@@ -141,11 +164,16 @@ local function SetupManual()
 
   btn:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GI.BuildCharacterTooltip(GameTooltip)
+    GameTooltip:AddDoubleLine("|cFF00C9FFGear|r|cFFFFFFFFInventory|r", "|cFF555555v" .. GI.VERSION .. "|r")
+    local vFS = _G["GameTooltipTextRight1"]
+    if vFS then
+      local font, _, flags = vFS:GetFont()
+      vFS:SetFont(font, 9, flags)
+    end
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("|cFFAAAAAA" .. L["TIP_CLICK"]       .. "|r", 1, 1, 1)
-    GameTooltip:AddLine("|cFFAAAAAA" .. L["TIP_RIGHT_CLICK"] .. "|r", 1, 1, 1)
-    GameTooltip:AddLine("|cFFAAAAAA" .. L["TIP_DRAG"]        .. "|r", 1, 1, 1)
+    GameTooltip:AddDoubleLine(L["TIP_CLICK"],       L["ACT_TOGGLE_WINDOW"], 1, 1, 1, 1, 0.82, 0)
+    GameTooltip:AddDoubleLine(L["TIP_RIGHT_CLICK"], L["ACT_OPEN_SETTINGS"], 1, 1, 1, 1, 0.82, 0)
+    GameTooltip:AddDoubleLine(L["TIP_DRAG"],        L["ACT_REPOSITION"],    1, 1, 1, 1, 0.82, 0)
     GameTooltip:Show()
   end)
 

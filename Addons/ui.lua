@@ -7,38 +7,65 @@ local L = GI.L
 
 -- ─── Layout Constants ─────────────────────────────────────────────────────────
 
-local DEFAULT_W   = 760
-local DEFAULT_H   = 480
-local MIN_W       = 640
-local MIN_H       = 480
-local TITLE_H     = 30
-local CHAR_LIST_W = 200
-local DIVIDER_X   = CHAR_LIST_W + 13  -- 213
-local GEAR_X      = DIVIDER_X + 3     -- 216
-local BODY_TOP_Y  = -(TITLE_H + 14)
-local BODY_BOT_Y  = 12
+local DEFAULT_W   = 500
+local CHAR_LIST_W = 180
+
+local BODY_TOP_Y  = -30  -- just below title bar (no portrait)
+local BODY_BOT_Y  = 12   -- bottom inset
 local CHAR_ROW_H  = 28
-local GEAR_ROW_H  = 26
-local GEAR_HDR_H  = 52
-local COL_HDR_H   = 20
-local SB_PAD      = 22  -- right padding for gear scrollbar inside the window
+local GEAR_ROW_H  = 28
+local INFO_H      = 58   -- char info block + ITEMS label + gaps
+-- Fixed height: title + info block + gear rows + bottom inset.
+local FIXED_H = -BODY_TOP_Y + INFO_H
+              + #GI.GEAR_SLOTS * GEAR_ROW_H + BODY_BOT_Y
 
--- ─── Quality Colors ───────────────────────────────────────────────────────────
+-- ─── Empty Slot Icons ─────────────────────────────────────────────────────────
+-- GetInventorySlotInfo(slotName) returns (slotID, emptyTexture) — same icons as
+-- the character paperdoll frame uses for unequipped slots.
 
-local QUALITY_COLOR = {
-  [0] = { 0.62, 0.62, 0.62 }, -- Poor
-  [1] = { 1.00, 1.00, 1.00 }, -- Common
-  [2] = { 0.12, 1.00, 0.00 }, -- Uncommon
-  [3] = { 0.00, 0.44, 0.87 }, -- Rare
-  [4] = { 0.64, 0.21, 0.93 }, -- Epic
-  [5] = { 1.00, 0.50, 0.00 }, -- Legendary
-  [6] = { 0.90, 0.80, 0.50 }, -- Artifact
-  [7] = { 0.00, 0.80, 1.00 }, -- Heirloom
-}
+local EMPTY_SLOT_ICON = (function()
+  local map = {
+    [1]  = "HeadSlot",
+    [2]  = "NeckSlot",
+    [3]  = "ShoulderSlot",
+    [15] = "BackSlot",
+    [5]  = "ChestSlot",
+    [9]  = "WristSlot",
+    [10] = "HandsSlot",
+    [6]  = "WaistSlot",
+    [7]  = "LegsSlot",
+    [8]  = "FeetSlot",
+    [11] = "Finger0Slot",
+    [12] = "Finger1Slot",
+    [13] = "Trinket0Slot",
+    [14] = "Trinket1Slot",
+    [16] = "MainHandSlot",
+    [17] = "SecondaryHandSlot",
+  }
+  local t = {}
+  for slotID, slotName in pairs(map) do
+    local _, tex = GetInventorySlotInfo(slotName)
+    t[slotID] = tex
+  end
+  return t
+end)()
+
+-- ─── Colors ───────────────────────────────────────────────────────────────────
 
 local function QColor(quality)
-  local c = QUALITY_COLOR[quality] or QUALITY_COLOR[1]
-  return c[1], c[2], c[3]
+  local c = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+  if c then return c.r, c.g, c.b end
+  return 1, 1, 1  -- fallback white
+end
+
+-- Returns color code for avgIlvl from stored per-character color (saved during scan).
+-- Falls back to white if no color is stored (nil in DB).
+local function IlvlColorCode(charData)
+  local c = charData and charData.avgIlvlColor
+  if c then
+    return string.format("|cFF%02X%02X%02X", c.r * 255, c.g * 255, c.b * 255)
+  end
+  return "|cFFFFFFFF"
 end
 
 -- ─── Utilities ────────────────────────────────────────────────────────────────
@@ -60,64 +87,22 @@ end
 
 -- ─── Widget Pools ─────────────────────────────────────────────────────────────
 
-local charButtons = {}
 local gearRows    = {}
 local selectedKey = nil
 
--- ─── Character List Button ────────────────────────────────────────────────────
+-- ─── Comparison Tooltip Suppression ──────────────────────────────────────────
+-- ShoppingTooltip1/2 are triggered asynchronously via OnTooltipSetItem after
+-- item data loads, so a simple Hide() call after SetHyperlink is not reliable.
+-- Instead we hook OnShow once and suppress via a flag while our button is hovered.
 
-local function GetOrCreateCharButton(idx)
-  if charButtons[idx] then return charButtons[idx] end
+local suppressCompare = false
 
-  local parent = GI.mainWindow.charScrollChild
-  local btn    = CreateFrame("Button", nil, parent)
-  btn:SetHeight(CHAR_ROW_H)
-  btn:SetPoint("TOPLEFT", 0, -(idx - 1) * CHAR_ROW_H)
-  btn:SetPoint("RIGHT",   0, 0)
-
-  local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-  hl:SetAllPoints()
-  hl:SetColorTexture(0.3, 0.55, 0.9, 0.2)
-
-  local sel = btn:CreateTexture(nil, "BACKGROUND")
-  sel:SetAllPoints()
-  sel:SetColorTexture(0.2, 0.42, 0.8, 0.3)
-  sel:Hide()
-  btn.selBg = sel
-
-  local raceIcon = btn:CreateTexture(nil, "ARTWORK")
-  raceIcon:SetSize(18, 18)
-  raceIcon:SetPoint("LEFT", 2, 0)
-  btn.raceIcon = raceIcon
-
-  local icon = btn:CreateTexture(nil, "ARTWORK")
-  icon:SetSize(20, 20)
-  icon:SetPoint("LEFT", 22, 0)
-  btn.classIcon = icon
-
-  local nameFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  nameFS:SetPoint("LEFT", 46, 2)
-  nameFS:SetPoint("RIGHT", -44, 0)
-  nameFS:SetJustifyH("LEFT")
-  btn.nameFS = nameFS
-
-  local ilvlFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  ilvlFS:SetPoint("RIGHT", -4, 0)
-  ilvlFS:SetWidth(40)
-  ilvlFS:SetJustifyH("RIGHT")
-  btn.ilvlFS = ilvlFS
-
-  btn:SetScript("OnClick", function(self)
-    if not self.charKey then return end
-    for _, b in ipairs(charButtons) do
-      if b.selBg then b.selBg:Hide() end
-    end
-    self.selBg:Show()
-    GI.ShowCharacterGear(self.charKey)
-  end)
-
-  charButtons[idx] = btn
-  return btn
+do
+  local function SuppressOnShow(self)
+    if suppressCompare then self:Hide() end
+  end
+  if ShoppingTooltip1 then ShoppingTooltip1:HookScript("OnShow", SuppressOnShow) end
+  if ShoppingTooltip2 then ShoppingTooltip2:HookScript("OnShow", SuppressOnShow) end
 end
 
 -- ─── Gear Row ─────────────────────────────────────────────────────────────────
@@ -131,48 +116,64 @@ local function GetOrCreateGearRow(idx)
   row:SetPoint("TOPLEFT", 0, -(idx - 1) * GEAR_ROW_H)
   row:SetPoint("RIGHT",   0, 0)
 
-  if idx % 2 == 0 then
-    local bg = row:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.08, 0.08, 0.14, 0.55)
-  end
+  -- Col 1: Icon button (sized to match border overlay)
+  local iconBtn = CreateFrame("Button", nil, row)
+  iconBtn:SetSize(26, 26)
+  iconBtn:SetPoint("LEFT", 4, 0)
 
-  local iconT = row:CreateTexture(nil, "ARTWORK")
-  iconT:SetSize(20, 20)
-  iconT:SetPoint("LEFT", 2, 0)
+  local iconT = iconBtn:CreateTexture(nil, "ARTWORK")
+  iconT:SetSize(22, 22)
+  iconT:SetPoint("CENTER")
   iconT:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   row.iconT = iconT
 
-  local slotFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  slotFS:SetPoint("LEFT", 26, 0)
-  slotFS:SetWidth(68)
-  slotFS:SetJustifyH("LEFT")
-  slotFS:SetTextColor(0.6, 0.6, 0.6)
-  row.slotFS = slotFS
+  local iconBorder = iconBtn:CreateTexture(nil, "OVERLAY")
+  iconBorder:SetAllPoints()
+  iconBorder:SetAtlas("UI-HUD-ActionBar-IconFrame")
+  row.iconBorder = iconBorder
 
-  local nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  nameFS:SetPoint("LEFT", 98, 0)
-  nameFS:SetPoint("RIGHT", -52, 0)  -- stretch with row; leaves room for ilvl
-  nameFS:SetJustifyH("LEFT")
-  row.nameFS = nameFS
+  iconBtn:SetScript("OnEnter", function(self)
+    local link = self:GetParent().itemLink
+    if not link then return end
+    suppressCompare = true
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetHyperlink(link)
+    GameTooltip:Show()
+  end)
+  iconBtn:SetScript("OnLeave", function()
+    suppressCompare = false
+    GameTooltip:Hide()
+  end)
+  row.iconBtn = iconBtn
 
-  local ilvlFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  ilvlFS:SetPoint("RIGHT", -4, 0)
-  ilvlFS:SetWidth(44)
+  -- iLvl badge (top-right of icon, outlined)
+  local ilvlFS = iconBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  local font, size = ilvlFS:GetFont()
+  ilvlFS:SetFont(font, size, "OUTLINE")
+  ilvlFS:SetPoint("TOPRIGHT", iconBtn, "TOPRIGHT", -2, -1)
   ilvlFS:SetJustifyH("RIGHT")
   row.ilvlFS = ilvlFS
 
-  row:EnableMouse(true)
-  row:SetScript("OnEnter", function(self)
-    if self.itemLink then
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetHyperlink(self.itemLink)
-      GameTooltip:Show()
-    end
-  end)
-  row:SetScript("OnLeave", function()
-    GameTooltip:Hide()
-  end)
+  -- Col 2: Slot name (line 1, small) + Item name (line 2), vertically centered on icon
+  local textGroup = CreateFrame("Frame", nil, row)
+  textGroup:SetPoint("LEFT", iconBtn, "RIGHT", 6, 0)
+  textGroup:SetPoint("RIGHT", -6, 0)
+  textGroup:SetPoint("TOP", iconBtn)
+  textGroup:SetPoint("BOTTOM", iconBtn)
+
+  local slotFS = textGroup:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  slotFS:SetPoint("BOTTOMLEFT", textGroup, "LEFT", 0, 0)
+  slotFS:SetPoint("RIGHT")
+  slotFS:SetJustifyH("LEFT")
+  slotFS:SetTextColor(0.5, 0.5, 0.5)
+  row.slotFS = slotFS
+
+  local nameFS = textGroup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  nameFS:SetPoint("TOPLEFT", textGroup, "LEFT", 0, 0)
+  nameFS:SetPoint("RIGHT")
+  nameFS:SetJustifyH("LEFT")
+  nameFS:SetWordWrap(false)
+  row.nameFS = nameFS
 
   gearRows[idx] = row
   return row
@@ -181,13 +182,11 @@ end
 -- ─── Main Window Creation ─────────────────────────────────────────────────────
 
 local function CreateMainWindow()
-  local f = CreateFrame("Frame", "GearInventoryMainFrame", UIParent, "BackdropTemplate")
-  f:SetSize(DEFAULT_W, DEFAULT_H)
+  local f = CreateFrame("Frame", "GearInventoryMainFrame", UIParent, "PortraitFrameTemplate")
+  f:SetSize(DEFAULT_W, FIXED_H)
   f:SetPoint("CENTER")
   f:SetFrameStrata("HIGH")
   f:SetMovable(true)
-  f:SetResizable(true)
-  f:SetResizeBounds(MIN_W, MIN_H)
   f:EnableMouse(true)
   f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
@@ -195,169 +194,186 @@ local function CreateMainWindow()
   f:SetClampedToScreen(true)
   f:Hide()
 
-  f:SetBackdrop({
-    bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-    tile = true, tileSize = 32, edgeSize = 32,
-    insets = { left = 11, right = 12, top = 12, bottom = 11 },
-  })
-  f:SetBackdropColor(0.05, 0.05, 0.12, 0.97)
+  -- ButtonFrameTemplate provides: f.TitleContainer.TitleText, f.PortraitContainer.portrait, f.CloseButton
+  f.TitleContainer.TitleText:SetText("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
+  f.PortraitContainer:Hide()
+  -- Replace portrait corner with standard metal corner
+  f.NineSlice.TopLeftCorner:SetAtlas("UI-Frame-Metal-CornerTopLeft", true)
+  -- Extend title bar to fill the space freed by the hidden portrait
+  f.TitleContainer:ClearAllPoints()
+  f.TitleContainer:SetPoint("TOPLEFT", 4, -1)
+  f.TitleContainer:SetPoint("TOPRIGHT", -24, -1)
+  f.CloseButton:SetScript("OnClick", function() f:Hide() end)
+
+  local versionFS = f.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  local vFont, vSize = versionFS:GetFont()
+  versionFS:SetFont(vFont, vSize - 2)
+  versionFS:SetPoint("RIGHT", f.CloseButton, "LEFT", -4, 0)
+  versionFS:SetText("|cFF555555v" .. GI.VERSION .. "|r")
 
   tinsert(UISpecialFrames, "GearInventoryMainFrame")
 
-  -- Title bar
-  local titleBg = f:CreateTexture(nil, "ARTWORK")
-  titleBg:SetPoint("TOPLEFT",  12, -12)
-  titleBg:SetPoint("TOPRIGHT", -12, -12)
-  titleBg:SetHeight(TITLE_H)
-  titleBg:SetColorTexture(0.08, 0.1, 0.22, 0.9)
 
-  local titleFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  titleFS:SetPoint("TOPLEFT", 22, -16)
-  titleFS:SetText("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
+  -- ── Background ─────────────────────────────────────────────────────────────
+  if f.TopTileStreaks then f.TopTileStreaks:Hide() end
+  f.Bg:Hide()
+  local bgJourneys = f:CreateTexture(nil, "BACKGROUND", nil, -3)
+  bgJourneys:SetAtlas("UI-Journeys-BG")
+  bgJourneys:SetSize(f:GetWidth() - 3, f:GetHeight() - 6)
+  bgJourneys:SetPoint("CENTER", f, "CENTER")
 
-  local verFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  verFS:SetPoint("LEFT", titleFS, "RIGHT", 6, 0)
-  verFS:SetText("|cFF555555v" .. GI.VERSION .. "|r")
 
-  local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-  closeBtn:SetPoint("TOPRIGHT", -4, -4)
-  closeBtn:SetScript("OnClick", function() f:Hide() end)
+  -- ── Left panel: Character list (full height) ───────────────────────────────
 
-  -- Resize grip (bottom-right corner)
-  local resizeBtn = CreateFrame("Button", nil, f)
-  resizeBtn:SetSize(16, 16)
-  resizeBtn:SetPoint("BOTTOMRIGHT", -10, 10)
-  resizeBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-  resizeBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-  resizeBtn:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-  resizeBtn:SetScript("OnMouseDown", function(_, button)
-    if button == "LeftButton" then f:StartSizing("BOTTOMRIGHT") end
-  end)
-  resizeBtn:SetScript("OnMouseUp", function() f:StopMovingOrSizing() end)
-
-  -- Horizontal divider below title
-  local hDiv = f:CreateTexture(nil, "ARTWORK")
-  hDiv:SetHeight(1)
-  hDiv:SetColorTexture(0.22, 0.22, 0.40, 1)
-  hDiv:SetPoint("TOPLEFT",  14, BODY_TOP_Y + 1)
-  hDiv:SetPoint("TOPRIGHT", -14, BODY_TOP_Y + 1)
-
-  -- ── Left panel: Character list (mousewheel scroll, no visible scrollbar) ───
-
-  local charLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  charLabel:SetPoint("TOPLEFT", 18, BODY_TOP_Y - 4)
-  charLabel:SetText("|cFF888888" .. L["PANEL_CHARACTERS"] .. "|r")
-
-  local charSF = CreateFrame("ScrollFrame", "GICharScrollFrame", f)
-  charSF:SetPoint("TOPLEFT",    14, BODY_TOP_Y - 22)
+  -- Store-style: WowScrollBoxList + MinimalScrollBar (auto-hide)
+  local charSF = CreateFrame("Frame", "GICharScrollBox", f, "WowScrollBoxList")
+  charSF:SetPoint("TOPLEFT",    14, BODY_TOP_Y - 4)
   charSF:SetPoint("BOTTOMLEFT", 14, BODY_BOT_Y)
-  charSF:SetWidth(CHAR_LIST_W - 2)
-  charSF:EnableMouseWheel(true)
-  charSF:SetScript("OnMouseWheel", function(self, delta)
-    local cur  = self:GetVerticalScroll()
-    local maxS = self:GetVerticalScrollRange()
-    local step = CHAR_ROW_H * 3
-    self:SetVerticalScroll(math.max(0, math.min(maxS, cur - delta * step)))
+  charSF:SetWidth(CHAR_LIST_W - 18)
+
+  local charSB = CreateFrame("EventFrame", "GICharScrollBar", f, "MinimalScrollBar")
+  charSB:SetPoint("TOPLEFT",    charSF, "TOPRIGHT",    2, -4)
+  charSB:SetPoint("BOTTOMLEFT", charSF, "BOTTOMRIGHT", 2,  4)
+  charSB:SetScale(0.70)
+
+  local charView = CreateScrollBoxListLinearView()
+  charView:SetElementExtent(CHAR_ROW_H)
+  charView:SetElementFactory(function(factory, node)
+    -- GICharButtonTemplate — Button, определён в Addons/templates.xml
+    factory("GICharButtonTemplate", function(btn, nodeArg)
+      if not btn._gi_setup then
+        btn._gi_setup = true
+
+        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(0.65, 0.45, 0.10, 0.18)
+
+        local sel = btn:CreateTexture(nil, "BACKGROUND")
+        sel:SetAllPoints()
+        sel:SetColorTexture(0.55, 0.38, 0.08, 0.28)
+        sel:Hide()
+        btn.selBg = sel
+
+        local raceIcon = btn:CreateTexture(nil, "ARTWORK")
+        raceIcon:SetSize(18, 18)
+        raceIcon:SetPoint("LEFT", 2, 0)
+        btn.raceIcon = raceIcon
+
+        local nameFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        nameFS:SetPoint("LEFT", 24, 0)
+        nameFS:SetPoint("RIGHT", -54, 0)
+        nameFS:SetPoint("BOTTOM", btn, "CENTER", 0, -2)
+        nameFS:SetJustifyH("LEFT")
+        nameFS:SetWordWrap(false)
+        btn.nameFS = nameFS
+
+        local realmFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local rFont, rSize = realmFS:GetFont()
+        realmFS:SetFont(rFont, rSize - 2)
+        realmFS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, 0)
+        realmFS:SetPoint("RIGHT", -54, 0)
+        realmFS:SetJustifyH("LEFT")
+        realmFS:SetTextColor(0.45, 0.45, 0.45)
+        btn.realmFS = realmFS
+
+        local ilvlFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        ilvlFS:SetPoint("RIGHT", -14, 0)
+        ilvlFS:SetText("000")
+        local minW = ilvlFS:GetStringWidth()
+        ilvlFS:SetText("")
+        ilvlFS:SetWidth(minW)
+        ilvlFS:SetJustifyH("RIGHT")
+        btn.ilvlFS = ilvlFS
+
+        btn:SetScript("OnClick", function(self)
+          if not self.charKey then return end
+          selectedKey = self.charKey
+          GI.ShowCharacterGear(self.charKey)
+        end)
+      end
+
+      -- nodeArg — DataProvider node, переданный WoW при каждом рендере
+      if not nodeArg then return end
+      local entry = nodeArg.GetData and nodeArg:GetData() or nodeArg
+      if not entry or not entry.key then return end
+      local d = entry.data
+      btn.charKey = entry.key
+
+      local r, g, b2    = GI.ClassRGB(d.class)
+      btn.nameFS:SetText(d.name or "?")
+      btn.nameFS:SetTextColor(r, g, b2)
+      btn.realmFS:SetText(d.realm or "")
+
+      local ready = GI.IsIlvlReady(entry.key)
+      if d.avgIlvl ~= nil then
+        local suffix = not ready and "|cFF666666~|r" or ""
+        btn.ilvlFS:SetText(IlvlColorCode(d) .. d.avgIlvl .. "|r" .. suffix)
+      elseif not ready then
+        btn.ilvlFS:SetText("|cFF666666...|r")
+      else
+        btn.ilvlFS:SetText("|cFF666666?|r")
+      end
+
+      local raceAtlas = GI.RaceAtlas(d.raceFile, d.sex)
+      if raceAtlas then
+        btn.raceIcon:SetAtlas(raceAtlas)
+        btn.raceIcon:Show()
+      else
+        btn.raceIcon:Hide()
+      end
+
+      btn.selBg:SetShown(entry.key == selectedKey)
+    end)
   end)
 
-  local charSC = CreateFrame("Frame", "GICharScrollChild", charSF)
-  charSC:SetWidth(CHAR_LIST_W - 4)
-  charSC:SetHeight(1)
-  charSF:SetScrollChild(charSC)
-  f.charScrollChild = charSC
+  ScrollUtil.InitScrollBoxListWithScrollBar(charSF, charSB, charView)
+  f.charScrollBox = charSF
 
-  -- Vertical divider
-  local vDiv = f:CreateTexture(nil, "ARTWORK")
-  vDiv:SetWidth(1)
-  vDiv:SetColorTexture(0.22, 0.22, 0.40, 1)
-  vDiv:SetPoint("TOP",    f, "TOPLEFT",    DIVIDER_X, BODY_TOP_Y)
-  vDiv:SetPoint("BOTTOM", f, "BOTTOMLEFT", DIVIDER_X, BODY_BOT_Y)
+  -- ── Right panel: char info + gear list ──────────────────────────────────────
 
-  -- ── Right panel: Character info header ─────────────────────────────────────
+  local rightX = 10  -- offset from charSB right edge
 
-  local rX = GEAR_X
-
+  -- Character info block
   local charNameFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  charNameFS:SetPoint("TOPLEFT", rX, BODY_TOP_Y - 4)
+  charNameFS:SetPoint("LEFT", charSB, "RIGHT", rightX, 0)
+  charNameFS:SetPoint("TOP", f, "TOP", 0, BODY_TOP_Y - 4)
+  charNameFS:SetPoint("RIGHT", -14, 0)
+  charNameFS:SetJustifyH("LEFT")
+  charNameFS:SetWordWrap(false)
   charNameFS:SetText("|cFF555555" .. L["HINT_SELECT_CHAR"] .. "|r")
   f.charNameFS = charNameFS
 
   local charInfoFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  charInfoFS:SetPoint("TOPLEFT", rX, BODY_TOP_Y - 28)
+  charInfoFS:SetPoint("TOPLEFT", charNameFS, "BOTTOMLEFT", 0, -2)
+  charInfoFS:SetPoint("RIGHT", -14, 0)
+  charInfoFS:SetJustifyH("LEFT")
+  charInfoFS:SetWordWrap(false)
   charInfoFS:SetText("")
   f.charInfoFS = charInfoFS
 
-  -- Rescan button (right-aligned, shown only for the current character)
-  local scanBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  scanBtn:SetSize(64, 22)
-  scanBtn:SetPoint("TOPRIGHT", -14, BODY_TOP_Y - 4)
-  scanBtn:SetText(L["BTN_RESCAN"])
-  scanBtn:Hide()
-  scanBtn:SetScript("OnClick", function()
-    GI.ScanCurrentCharacter()
-  end)
-  f.scanBtn = scanBtn
+  -- Faction icon (background, right-aligned behind info block)
+  local factionIcon = f:CreateTexture(nil, "ARTWORK", nil, -1)
+  factionIcon:SetSize(48, 48)
+  factionIcon:SetPoint("RIGHT", -18, 0)
+  factionIcon:SetPoint("TOP", charNameFS, "TOP", 0, 4)
+  factionIcon:Hide()
+  f.factionIcon = factionIcon
 
-  -- Last-update label (positioned to the left of the Rescan button)
-  local lastUpdateFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  lastUpdateFS:SetPoint("RIGHT", scanBtn, "LEFT", -8, 0)
-  lastUpdateFS:SetJustifyH("RIGHT")
-  lastUpdateFS:SetText("")
-  f.lastUpdateFS = lastUpdateFS
+  -- ITEMS label
+  local itemsLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  itemsLabel:SetPoint("TOPLEFT", charInfoFS, "BOTTOMLEFT", 0, -6)
+  itemsLabel:SetText("|cFF8A6A30ITEMS|r")
 
-  -- ── Column headers ─────────────────────────────────────────────────────────
+  -- ── Gear rows container ────────────────────────────────────────────────────
 
-  local colY = BODY_TOP_Y - GEAR_HDR_H
-
-  local slotHdr = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  slotHdr:SetPoint("TOPLEFT", rX + 26, colY)
-  slotHdr:SetText("|cFF777777" .. L["COL_SLOT"] .. "|r")
-
-  local nameHdr = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  nameHdr:SetPoint("TOPLEFT", rX + 98, colY)
-  nameHdr:SetText("|cFF777777" .. L["COL_ITEM_NAME"] .. "|r")
-
-  local ilvlHdr = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  ilvlHdr:SetPoint("TOPRIGHT", -(14 + SB_PAD + 4), colY)
-  ilvlHdr:SetText("|cFF777777" .. L["COL_ILVL"] .. "|r")
-
-  local colDiv = f:CreateTexture(nil, "ARTWORK")
-  colDiv:SetHeight(1)
-  colDiv:SetColorTexture(0.18, 0.18, 0.32, 0.9)
-  colDiv:SetPoint("TOPLEFT",  rX,  colY - COL_HDR_H + 2)
-  colDiv:SetPoint("TOPRIGHT", -14, colY - COL_HDR_H + 2)
-
-  -- ── Gear scroll frame (scrollbar repositioned inside the window) ───────────
-
-  local gearTopY = BODY_TOP_Y - GEAR_HDR_H - COL_HDR_H - 2
-
-  local gearSF = CreateFrame("ScrollFrame", "GIGearScrollFrame", f,
-    "UIPanelScrollFrameTemplate")
-  gearSF:SetPoint("TOPLEFT",     rX, gearTopY)
-  gearSF:SetPoint("BOTTOMRIGHT", -(14 + SB_PAD), BODY_BOT_Y)
-
-  -- Move the template scrollbar inside the window border
-  local scrollBar = _G["GIGearScrollFrameScrollBar"]
-  if scrollBar then
-    scrollBar:ClearAllPoints()
-    scrollBar:SetPoint("TOPLEFT",    gearSF, "TOPRIGHT", 4, -16)
-    scrollBar:SetPoint("BOTTOMLEFT", gearSF, "BOTTOMRIGHT", 4, 16)
-  end
+  local gearSF = CreateFrame("Frame", "GIGearScrollFrame", f)
+  gearSF:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 0, -4)
+  gearSF:SetPoint("RIGHT",  -14, 0)
+  gearSF:SetPoint("BOTTOM", 0, BODY_BOT_Y)
 
   local gearSC = CreateFrame("Frame", "GIGearScrollChild", gearSF)
-  gearSC:SetWidth(DEFAULT_W - GEAR_X - 14 - SB_PAD)
-  gearSC:SetHeight(#GI.GEAR_SLOTS * GEAR_ROW_H)
-  gearSF:SetScrollChild(gearSC)
+  gearSC:SetAllPoints()
   f.gearScrollChild = gearSC
-
-  -- ── Resize callback ────────────────────────────────────────────────────────
-
-  f:SetScript("OnSizeChanged", function(self, width, height)
-    if f.gearScrollChild then
-      f.gearScrollChild:SetWidth(math.max(width - GEAR_X - 14 - SB_PAD, 100))
-    end
-  end)
 
   GI.mainWindow = f
   return f
@@ -369,8 +385,7 @@ function GI.RefreshCharacterList()
   local w = GI.mainWindow
   if not w or not GI.db then return end
 
-  local order       = GI.db.config and GI.db.config.sortOrder or "ilvl"
-  local playerRealm = GetRealmName()
+  local order = GI.db.config and GI.db.config.sortOrder or "ilvl"
 
   local sorted = {}
   for key, data in pairs(GI.db.characters) do
@@ -381,59 +396,15 @@ function GI.RefreshCharacterList()
       return (a.data.name or "") < (b.data.name or "")
     elseif order == "class" then
       return (a.data.class or "") < (b.data.class or "")
-    else -- "ilvl"
+    else
       return (a.data.avgIlvl or 0) > (b.data.avgIlvl or 0)
     end
   end)
 
-  for _, btn in ipairs(charButtons) do btn:Hide() end
-
-  w.charScrollChild:SetHeight(math.max(#sorted * CHAR_ROW_H, 1))
-
-  for i, entry in ipairs(sorted) do
-    local btn = GetOrCreateCharButton(i)
-    local d   = entry.data
-    btn.charKey = entry.key
-
-    local r, g, b = GI.ClassRGB(d.class)
-
-    -- Append realm name only when it differs from the current server
-    local displayName = d.name or "?"
-    if d.realm and d.realm ~= playerRealm then
-      displayName = displayName .. "-" .. d.realm
-    end
-    btn.nameFS:SetText(displayName)
-    btn.nameFS:SetTextColor(r, g, b)
-
-    local ready = GI.IsIlvlReady(entry.key)
-    if d.avgIlvl ~= nil then
-      local suffix = not ready and "|cFF666666~|r" or ""
-      btn.ilvlFS:SetText("|cFFFFD700" .. d.avgIlvl .. "|r" .. suffix)
-    elseif not ready then
-      btn.ilvlFS:SetText("|cFF666666...|r")
-    else
-      btn.ilvlFS:SetText("|cFF666666?|r")
-    end
-
-    if d.class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[d.class] then
-      btn.classIcon:SetTexture(
-        "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
-      btn.classIcon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[d.class]))
-    else
-      btn.classIcon:SetTexture(nil)
-    end
-
-    local raceAtlas = GI.RaceAtlas(d.raceFile, d.sex)
-    if raceAtlas then
-      btn.raceIcon:SetAtlas(raceAtlas)
-      btn.raceIcon:Show()
-    else
-      btn.raceIcon:Hide()
-    end
-
-    if entry.key == selectedKey then btn.selBg:Show() else btn.selBg:Hide() end
-
-    btn:Show()
+  local scrollPct = w.charScrollBox:GetScrollPercentage()
+  w.charScrollBox:SetDataProvider(CreateDataProvider(sorted))
+  if scrollPct then
+    w.charScrollBox:SetScrollPercentage(scrollPct, true)
   end
 end
 
@@ -463,34 +434,35 @@ function GI.ShowCharacterGear(charKey)
     "%s|cFF%02X%02X%02X%s|r%s",
     raceMarkup, rH, gH, bH, d.name or "?", realmSuffix)
 
-  -- Character info line (class, level, avg ilvl — NO last-update here)
+  -- Character info line (class, level, avg ilvl, last update)
   local ready = GI.IsIlvlReady(charKey)
   local ilvlPart
   if d.avgIlvl ~= nil then
     local marker = not ready and " |cFF666666~|r" or ""
-    ilvlPart = string.format("  |cFFFFD700" .. L["CHAR_AVG_ILVL"] .. "|r", d.avgIlvl) .. marker
+    ilvlPart = "  " .. string.format(L["CHAR_AVG_ILVL"], IlvlColorCode(d) .. d.avgIlvl .. "|r") .. marker
   elseif not ready then
     ilvlPart = "  |cFF666666...|r"
   else
     ilvlPart = ""
   end
+  local agePart = "  |cFF888888" .. FormatAge(d.lastUpdate) .. "|r"
   w.charInfoFS:SetFormattedText(
-    "|cFF%02X%02X%02X%s|r  |cFFFFFFFF\226\128\162 " .. L["CHAR_LEVEL"] .. "|r%s",
+    "|cFF%02X%02X%02X%s|r  |cFFFFFFFF\226\128\162 " .. L["CHAR_LEVEL"] .. "|r%s%s",
     rH, gH, bH, ClassDisplayName(d.class),
-    d.level or 0, ilvlPart)
+    d.level or 0, ilvlPart, agePart)
 
-  -- Last-update text + Rescan button positioning
-  local currentKey = UnitName("player") .. "-" .. GetRealmName()
-  if charKey == currentKey then
-    w.scanBtn:Show()
-    w.lastUpdateFS:ClearAllPoints()
-    w.lastUpdateFS:SetPoint("RIGHT", w.scanBtn, "LEFT", -8, 0)
+  -- Faction icon
+  local FACTION_ATLAS = {
+    Horde    = "MountJournalIcons-Horde",
+    Alliance = "MountJournalIcons-Alliance",
+  }
+  local fAtlas = d.faction and FACTION_ATLAS[d.faction]
+  if fAtlas then
+    w.factionIcon:SetAtlas(fAtlas)
+    w.factionIcon:Show()
   else
-    w.scanBtn:Hide()
-    w.lastUpdateFS:ClearAllPoints()
-    w.lastUpdateFS:SetPoint("TOPRIGHT", -14, BODY_TOP_Y - 8)
+    w.factionIcon:Hide()
   end
-  w.lastUpdateFS:SetText("|cFF555555" .. FormatAge(d.lastUpdate) .. "|r")
 
   -- Gear rows
   for _, row in ipairs(gearRows) do row:Hide() end
@@ -501,16 +473,26 @@ function GI.ShowCharacterGear(charKey)
     local row  = GetOrCreateGearRow(i)
     local item = d.gear and d.gear[slot.id]
 
-    row.slotFS:SetText(slot.name)
+    row.slotData = slot
+    row.avgIlvl  = avgIlvl
+    row.slotFS:SetText(L[slot.key])
 
     if item then
-      row.iconT:SetTexture(item.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+      row.itemData = item
+      row.itemLink = item.link
+
+      row.iconT:SetTexture(item.icon or EMPTY_SLOT_ICON[slot.id])
       row.iconT:SetAlpha(item.cached == false and 0.45 or 1.0)
 
-      local qr, qg, qb = QColor(item.quality or 1)
       row.nameFS:SetText(item.name or "?")
-      row.nameFS:SetTextColor(qr, qg, qb)
+      if item.cached == false then
+        row.nameFS:SetTextColor(0.5, 0.5, 0.5)
+      else
+        local qr, qg, qb = QColor(item.quality or 1)
+        row.nameFS:SetTextColor(qr, qg, qb)
+      end
 
+      -- iLvl badge on icon
       if (item.ilvl or 0) > 0 then
         row.ilvlFS:SetText(tostring(item.ilvl))
         if not ready then
@@ -524,14 +506,15 @@ function GI.ShowCharacterGear(charKey)
         row.ilvlFS:SetText("")
       end
 
-      row.itemLink = item.link
     else
-      row.iconT:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-      row.iconT:SetAlpha(0.2)
+      row.itemData = nil
+      row.itemLink = nil
+
+      row.iconT:SetTexture(EMPTY_SLOT_ICON[slot.id])
+      row.iconT:SetAlpha(0.5)
       row.nameFS:SetText("|cFF3A3A3A" .. L["ITEM_EMPTY"] .. "|r")
       row.nameFS:SetTextColor(1, 1, 1)
       row.ilvlFS:SetText("")
-      row.itemLink = nil
     end
 
     row:Show()
@@ -555,8 +538,7 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_CHAR"] = {
       if w then
         w.charNameFS:SetText("|cFF555555" .. L["HINT_SELECT_CHAR"] .. "|r")
         w.charInfoFS:SetText("")
-        w.lastUpdateFS:SetText("")
-        w.scanBtn:Hide()
+        w.factionIcon:Hide()
         for _, row in ipairs(gearRows) do row:Hide() end
       end
     end
