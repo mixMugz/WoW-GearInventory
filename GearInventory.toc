@@ -1,9 +1,10 @@
-## Interface: 120000 120001 120005
+## Interface: 120000 120001
 ## Title: |cFF00C9FFGear|r|cFFFFFFFFInventory|r
 ## Notes: |cFF00FF00|nTrack and compare gear across all your characters|r
 ## Author: mixMugz (a.k.a. Муади-Ревущийфьорд)
+## IconTexture: Interface\AddOns\GearInventory\Textures\gi_icon
 ## Category: Bags & Inventory
-## Version: |cFF888888 12.0.1#0002|r
+## Version: |cFF888888 12.0.1#0003|r
 ## SavedVariables: GearInventoryDB
 
 ## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, Bazooka, SexyMap
@@ -13,8 +14,9 @@
 
 Addons/core.lua
 Locales/enUS.lua
-Addons/main.lua
 Options/config.lua
+Addons/db.lua
+Addons/main.lua
 Addons/libs.lua
 Addons/ui-templates.xml
 Addons/ui.lua

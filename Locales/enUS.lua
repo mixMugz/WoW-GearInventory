@@ -13,7 +13,7 @@ L["CMD_TOGGLE"]          = "|cFF00FF00/gi|r |cFFFFFFFF-|r |cFFFFD100%s|r"
 L["CMD_OPTIONS"]         = "|cFF00FF00/gi options|r |cFFFFFFFF-|r |cFFFFD100%s|r"
 L["CMD_MINIMAP"]         = "|cFF00FF00/gi minimap|r |cFFFFFFFF-|r |cFFFFD100%s|r"
 L["ACT_TOGGLE_WINDOW"]   = "Toggle main window"
-L["ACT_OPEN_SETTINGS"]   = "Open Settings"
+L["ACT_OPEN_SETTINGS"]   = "Open settings"
 L["ACT_TOGGLE_MINIMAP"]  = "Toggle minimap icon"
 
 -- ─── Item States ──────────────────────────────────────────────────────────────
@@ -33,6 +33,10 @@ L["TIME_DAY"]            = "%dd ago"
 
 L["CHAR_LEVEL"]          = "Level %d"
 L["CHAR_AVG_ILVL"]       = "Avg ilvl: %s"
+L["CHAR_LEVEL_SHORT"]    = "Lvl"
+L["TOOLTIP_AVG_ILVL"]    = "Avg ilvl"
+L["TOOLTIP_UPDATED"]     = "Updated"
+L["TOOLTIP_SAVED_SPECS"] = "Saved Specs:"
 
 -- ─── Character List Panel ─────────────────────────────────────────────────────
 
@@ -75,10 +79,8 @@ L["DELETE_CONFIRM"]      = "Delete |cFFFF6666%s|r from Gear Inventory?"
 
 -- ─── Tooltip Hints ────────────────────────────────────────────────────────────
 
-L["TIP_CLICK"]              = "Left Click:"
-L["TIP_RIGHT_CLICK"]        = "Right Click:"
-L["TIP_DRAG"]               = "Drag:"
-L["ACT_REPOSITION"]         = "Reposition Button"
+L["TIP_CLICK"]              = "Left click:"
+L["TIP_RIGHT_CLICK"]        = "Right click:"
 
 -- ─── Minimap Toggle Output ────────────────────────────────────────────────────
 
@@ -89,13 +91,18 @@ L["MINIMAP_SHOWN"]       = "|cFF44FF44shown|r"
 -- ─── Options Panel ────────────────────────────────────────────────────────────
 
 
-L["OPT_GENERAL"]         = "General"
-L["OPT_AUTO_SELECT"]     = "Auto-select current character on open"
+L["OPT_VERSION"]         = "Version"
+L["OPT_DB"]              = "DB"
+L["OPT_AUTHOR"]          = "Author"
+L["OPT_GENERAL"]         = "General Options"
 L["OPT_SORT_BY"]         = "Sort characters by"
 L["OPT_SORT_ILVL"]       = "Item Level"
 L["OPT_SORT_NAME"]       = "Name"
 L["OPT_SORT_CLASS"]      = "Class"
 L["OPT_MINIMAP"]         = "Minimap"
 L["OPT_SHOW_MINIMAP"]    = "Show minimap button"
+L["OPT_ITEMS"]           = "Items"
+L["OPT_COLOR_UPGRADE"]   = "Colorize upgrade rank"
+L["OPT_COLOR_STARS"]     = "Colorize upgrade stars"
 L["OPT_CHARACTERS"]      = "Saved Characters"
-L["OPT_CHARS_DESC"]      = "Click X to remove a character from the list"
+L["OPT_CHARS_DESC"]      = "Checkbox — include in recommendations. X — remove character."

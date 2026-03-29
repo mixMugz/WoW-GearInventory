@@ -29,7 +29,7 @@ end
 GI.brokerObj = GI.ldb:NewDataObject("GearInventory", {
   type  = "launcher",
   label = "GearInventory",
-  icon  = "Interface\\Icons\\INV_Misc_Gear_01",
+  icon  = GI.TEX.ICON,
   text  = "?",
 
   OnClick = function(_, button)

@@ -2,8 +2,8 @@
 -- Default configuration values and config management.
 -- Loaded after Core.lua and Libs.lua; called from Core's ADDON_LOADED via GI.ApplyDefaults().
 --
--- GI.db.config        — user preferences (sort order, auto-select, …)
--- GI.db.minimapButton — minimap button state (also consumed by LibDBIcon)
+-- GI.db.config               — user preferences (sort order, auto-select, …)
+-- GI.db.config.minimapButton — minimap button state (also consumed by LibDBIcon)
 
 local addonName, GI = ...
 

@@ -7,7 +7,7 @@ local addonName, GI = ...
 GI.L = setmetatable({}, { __index = function(_, k) return k end })
 
 -- ─── Version ───────────────────────────────────────────────/───────────────────
-GI.VERSION = "12.0.1#0002"
+GI.VERSION = "12.0.1#0003"
 GI.AUTHOR  = "mixMugz (a.k.a. Муади-Ревущийфьорд)"
 
 -- ─── Equipment Slots ──────────────────────────────────────────────────────────
@@ -31,22 +31,14 @@ GI.GEAR_SLOTS = {
   { id = 17, key = "SLOT_OFFHAND"   },
 }
 
--- ─── Class Colors ─────────────────────────────────────────────────────────────
-GI.CLASS_COLORS = {
-  DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 },
-  DEMONHUNTER = { r = 0.64, g = 0.19, b = 0.79 },
-  DRUID       = { r = 1.00, g = 0.49, b = 0.04 },
-  EVOKER      = { r = 0.20, g = 0.58, b = 0.50 },
-  HUNTER      = { r = 0.67, g = 0.83, b = 0.45 },
-  MAGE        = { r = 0.25, g = 0.78, b = 0.92 },
-  MONK        = { r = 0.00, g = 1.00, b = 0.59 },
-  PALADIN     = { r = 0.96, g = 0.55, b = 0.73 },
-  PRIEST      = { r = 1.00, g = 1.00, b = 1.00 },
-  ROGUE       = { r = 1.00, g = 0.96, b = 0.41 },
-  SHAMAN      = { r = 0.00, g = 0.44, b = 0.87 },
-  WARLOCK     = { r = 0.58, g = 0.51, b = 0.79 },
-  WARRIOR     = { r = 0.78, g = 0.61, b = 0.43 },
-}
+-- ─── Class Colors & Display Names ────────────────────────────────────────────
+-- Colors: WoW's built-in RAID_CLASS_COLORS — always up to date with new classes.
+-- Display names: built at load time via GetClassInfo — localised automatically.
+GI.CLASS_DISPLAY = {}
+for i = 1, GetNumClasses() do
+  local name, file = GetClassInfo(i)
+  if file then GI.CLASS_DISPLAY[file] = name end
+end
 
 -- ─── Class Armor Types ───────────────────────────────────────────────────────
 -- Static mapping: class token → armor proficiency (highest wearable type).
@@ -280,14 +272,85 @@ GI.SPEC_INFO = {
   },
 }
 
+-- ─── Upgrade Tracks (Midnight Season 1) ──────────────────────────────────────
+-- BonusID → { track (EN), rank (1=lowest), cur, max }
+-- Parsed from itemLink bonusIDs; independent of client locale.
+GI.UPGRADE_TRACKS = {}
+do
+  local tracks = {
+    { name = "Adventurer", rank = 1, start = 12769, max = 6 },
+    { name = "Veteran",    rank = 2, start = 12777, max = 6 },
+    { name = "Champion",   rank = 3, start = 12785, max = 6 },
+    { name = "Hero",       rank = 4, start = 12793, max = 6 },
+    { name = "Myth",       rank = 5, start = 12801, max = 6 },
+  }
+  for _, t in ipairs(tracks) do
+    for i = 1, t.max do
+      GI.UPGRADE_TRACKS[t.start + i - 1] = {
+        track = t.name,
+        rank  = t.rank,
+        cur   = i,
+        max   = t.max,
+      }
+    end
+  end
+end
+
+-- Parses bonusIDs from an itemLink and returns upgrade track info.
+-- Returns: track, cur, max, rank  or nil
+function GI.ParseUpgradeTrack(itemLink)
+  if not itemLink then return nil end
+  local bonusList = itemLink:match("item:%d+:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:%d+:([%d:]+)")
+  if not bonusList then return nil end
+  for idStr in bonusList:gmatch("(%d+)") do
+    local info = GI.UPGRADE_TRACKS[tonumber(idStr)]
+    if info then
+      return info.track, info.cur, info.max, info.rank
+    end
+  end
+  return nil
+end
+
+-- ─── Textures & Atlases ───────────────────────────────────────────────────────
+local ADDON_TEX = "Interface\\AddOns\\GearInventory\\Textures\\"
+
+GI.TEX = {
+  ICON          = ADDON_TEX .. "gi_icon",
+  MINIMAP       = ADDON_TEX .. "gi_icon_minimap",
+  LOGO          = ADDON_TEX .. "gi_logo",
+  STAR_EMPTY         = ADDON_TEX .. "star_empty_silver",
+  STAR_FILLED_IRON   = ADDON_TEX .. "star_filled_iron",
+  STAR_FILLED_BRONZE = ADDON_TEX .. "star_filled_bronze",
+  STAR_FILLED_SILVER = ADDON_TEX .. "star_filled_silver",
+  STAR_FILLED_GOLD   = ADDON_TEX .. "star_filled_gold",
+  PORTRAIT_MASK = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
+  MM_HIGHLIGHT  = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight",
+  MM_BORDER     = "Interface\\Minimap\\MiniMap-TrackingBorder",
+  MM_BG         = "Interface\\Minimap\\UI-Minimap-Background",
+  BTN_STOP      = "Interface\\Buttons\\UI-StopButton",
+  CLASS_ICONS   = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES",
+}
+
+GI.ATLAS = {
+  RACE_BORDER      = "talents-node-circle-gray",
+  ICON_FRAME       = "UI-HUD-ActionBar-IconFrame",
+  WINDOW_CORNER_TL = "UI-Frame-Metal-CornerTopLeft",
+  WINDOW_BG        = "UI-Journeys-BG",
+  FACTION_HORDE         = "UI-HUD-UnitFrame-Player-PVP-HordeIcon",
+  FACTION_ALLIANCE      = "UI-HUD-UnitFrame-Player-PVP-AllianceIcon",
+}
+
 -- ─── Default Configuration ────────────────────────────────────────────────────
 GI.DEFAULTS = {
   config = {
-    sortOrder  = "ilvl", -- "ilvl" | "name" | "class"
-    autoSelect = true,   -- auto-select current char when opening the window
-  },
-  minimapButton = {
-    hide  = false,
-    angle = 220, -- fallback angle when LibDBIcon is absent
+    dbVersion         = "v2",  -- incremented on breaking schema changes
+    sortOrder         = "ilvl", -- "ilvl" | "name" | "class"
+    autoSelect        = true,   -- auto-select current char when opening the window
+    colorUpgradeRank  = true,   -- colorize upgrade progress (1/6) by step
+    colorUpgradeStars = true,   -- colorize star icons by rank tier (iron/bronze/silver/gold)
+    minimapButton = {
+      hide  = false,
+      angle = 220, -- fallback angle when LibDBIcon is absent
+    },
   },
 }
