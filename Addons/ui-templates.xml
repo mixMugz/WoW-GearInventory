@@ -1,5 +1,0 @@
-<Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <!-- Virtual template for character list rows -->
-    <Button name="GICharButtonTemplate" virtual="true">
-    </Button>
-</Ui>

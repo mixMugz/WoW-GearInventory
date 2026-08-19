@@ -1,0 +1,7 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <!-- Virtual frame types for WowScrollBoxList pool separation.
+         Each type gets its own pool so group header and char row frames
+         are never cross-recycled. All setup logic lives in ui.lua. -->
+    <Button name="GIGroupHeaderTemplate" virtual="true"/>
+    <Button name="GICharButtonTemplate"  virtual="true"/>
+</Ui>

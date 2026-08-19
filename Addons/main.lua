@@ -110,16 +110,23 @@ function GI.BuildCharacterTooltip(tip)
   for key, data in pairs(GI.db.characters) do
     table.insert(sorted, { key = key, data = data })
   end
+  local function GetSpecBucket(data)
+    local ch = data.character or {}
+    return data.gear and ch.specID and data.gear[ch.specID]
+  end
+
   table.sort(sorted, function(a, b)
-    return ((a.data.character and a.data.character.avgIlvl) or 0)
-         > ((b.data.character and b.data.character.avgIlvl) or 0)
+    local ab = GetSpecBucket(a.data)
+    local bb = GetSpecBucket(b.data)
+    return ((ab and ab.avgIlvl) or 0) > ((bb and bb.avgIlvl) or 0)
   end)
 
   if #sorted > 0 then
     tip:AddLine(" ")
     for _, entry in ipairs(sorted) do
-      local d = entry.data
-      local ch = d.character or {}
+      local d      = entry.data
+      local ch     = d.character or {}
+      local bucket = GetSpecBucket(d)
       local r, g, b = GI.ClassRGB(ch.class)
       local icons = GI.RaceIconMarkup(ch.raceFile, ch.sex)
                  .. GI.ClassIconMarkup(ch.class)
@@ -130,11 +137,12 @@ function GI.BuildCharacterTooltip(tip)
       local nameColored = string.format(
         "|cFF%02X%02X%02X%s|r",
         r * 255, g * 255, b * 255, displayName)
-      local ready = GI.IsIlvlReady(entry.key)
+      local ready   = GI.IsIlvlReady(entry.key)
+      local avgIlvl = bucket and bucket.avgIlvl
       local ilvlText
-      if ch.avgIlvl ~= nil then
+      if avgIlvl ~= nil then
         local marker = not ready and " |cFF666666~|r" or ""
-        ilvlText = string.format("|cFFFFD700" .. L["CHAR_AVG_ILVL"] .. "|r", ch.avgIlvl) .. marker
+        ilvlText = string.format("|cFFFFD700" .. L["CHAR_AVG_ILVL"] .. "|r", avgIlvl) .. marker
       elseif not ready then
         ilvlText = "|cFF666666...|r"
       else
@@ -229,19 +237,17 @@ local function ScanCharacterGear(isLoginScan)
   if not d then
     d = {
       character = {
-        name                 = charName,
-        realm                = realm,
-        class                = class,
-        className            = className,
-        raceFile             = raceFile,
-        raceName             = raceName,
-        sex                  = sex,
-        faction              = faction,
-        factionName          = factionName,
-        specID               = specID,
-        level                = 0,
-        avgIlvl              = 0,
-        lastUpdate           = 0,
+        name        = charName,
+        realm       = realm,
+        class       = class,
+        className   = className,
+        raceFile    = raceFile,
+        raceName    = raceName,
+        sex         = sex,
+        faction     = faction,
+        factionName = factionName,
+        specID      = specID,
+        level       = 0,
       },
       gear = {},
     }
@@ -259,7 +265,6 @@ local function ScanCharacterGear(isLoginScan)
   d.character.factionName = factionName
   d.character.specID      = specID
   d.character.level       = UnitLevel("player")
-  d.character.lastUpdate  = time()
 
   -- Prune gear entries for specs that no longer exist on this character
   do
@@ -269,7 +274,6 @@ local function ScanCharacterGear(isLoginScan)
       local sid = select(1, GetSpecializationInfo(i))
       if sid then validSpecIDs[sid] = true end
     end
-    validSpecIDs[0] = true  -- keep fallback bucket
     for sid in pairs(d.gear) do
       if not validSpecIDs[sid] then
         d.gear[sid] = nil
@@ -279,16 +283,20 @@ local function ScanCharacterGear(isLoginScan)
 
   -- Ensure gear bucket for current spec exists
   if not d.gear[specIDKey] then
-    d.gear[specIDKey] = { incRecommend = true }
+    d.gear[specIDKey] = { slots = {}, incRecommend = true }
+  elseif not d.gear[specIDKey].slots then
+    d.gear[specIDKey].slots = {}
   end
 
-  local specGear = d.gear[specIDKey]
+  local specBucket = d.gear[specIDKey]
+  local specSlots  = specBucket.slots
 
   for _, slot in ipairs(GI.GEAR_SLOTS) do
+    local skey   = "s" .. slot.id
     local itemID = GetInventoryItemID("player", slot.id)
 
     if not itemID or itemID == 0 then
-      specGear[slot.id] = nil
+      specSlots[skey] = nil
     else
       local itemLink = GetInventoryItemLink("player", slot.id)
       local name, _, quality, ilvl, _, _, _, _, _, _, _, _, _, _, expacID = C_Item.GetItemInfo(itemLink or itemID)
@@ -308,7 +316,7 @@ local function ScanCharacterGear(isLoginScan)
         end
         effectiveIlvl = effectiveIlvl or ilvl or 0
 
-        local prevSlot = specGear[slot.id]
+        local prevSlot = specSlots[skey]
         local prevQ = prevSlot and prevSlot.id == itemID and prevSlot.quality or nil
         local finalQ = math.max(quality or 0, prevQ or 0)
         if finalQ == 0 then finalQ = 1 end
@@ -318,7 +326,7 @@ local function ScanCharacterGear(isLoginScan)
           upTrack, upCur, upMax, upRank = GI.ParseUpgradeTrack(itemLink)
         end
 
-        specGear[slot.id] = {
+        specSlots[skey] = {
           id      = itemID,
           link    = itemLink,
           name    = name,
@@ -339,12 +347,12 @@ local function ScanCharacterGear(isLoginScan)
         end
       else
         -- Item data not yet in cache; queue for deferred resolution.
-        specGear[slot.id] = {
+        specSlots[skey] = {
           id      = itemID,
           link    = itemLink,
           name    = L["ITEM_LOADING"],
-          ilvl    = (specGear[slot.id] and specGear[slot.id].ilvl) or 0,
-          quality = (specGear[slot.id] and specGear[slot.id].quality) or 1,
+          ilvl    = (specSlots[skey] and specSlots[skey].ilvl) or 0,
+          quality = (specSlots[skey] and specSlots[skey].quality) or 1,
           icon    = C_Item.GetItemIconByID(itemID),
           cached  = false,
         }
@@ -355,9 +363,10 @@ local function ScanCharacterGear(isLoginScan)
     end
   end
 
-  d.character.avgIlvl = FetchAvgIlvl() or d.character.avgIlvl or 0
+  specBucket.avgIlvl = FetchAvgIlvl() or specBucket.avgIlvl or 0
   local cr, cg, cb = GetItemLevelColor()
-  d.character.avgIlvlColor = { r = cr, g = cg, b = cb }
+  specBucket.avgIlvlColor = { r = cr, g = cg, b = cb }
+  specBucket.lastUpdate   = time()
 
   if HasPending() then
     eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
@@ -376,10 +385,85 @@ end
 -- Public entry point for the force-rescan button in ui.lua.
 GI.ScanCurrentCharacter = ScanCharacterGear
 
+function GI.DeleteAllCharacters()
+  if not GI.db then return end
+  local count = 0
+  for _ in pairs(GI.db.characters) do count = count + 1 end
+  GI.db.characters = {}
+  ilvlReady = {}
+  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(GI.L["DELETE_ALL_DONE"], count))
+  GI.ScanCurrentCharacter()
+end
+
+-- Queues C_Item.RequestLoadItemDataByID for all gear slots of all saved characters.
+-- Needed so item tooltips (gems, enchants, etc.) resolve from the client cache.
+function GI.WarmUpAllCharacters()
+  if not GI.db or not GI.db.characters then return end
+  local queued = false
+  for charKey, d in pairs(GI.db.characters) do
+    if d and d.gear then
+      for specID, bucket in pairs(d.gear) do
+        if bucket.slots then
+          for skey, slot in pairs(bucket.slots) do
+            local itemID = slot.id
+            if itemID then
+              local slotID = tonumber(skey:sub(2))
+              local pkey   = itemID .. ":" .. slotID
+              if not pendingItems[pkey] then
+                pendingItems[pkey] = { charKey = charKey, slotID = slotID, itemID = itemID, specID = specID }
+                C_Item.RequestLoadItemDataByID(itemID)
+                queued = true
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  if queued then
+    eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+  end
+end
+
 function GI.DeleteCharacter(charKey)
   if not GI.db or not GI.db.characters[charKey] then return end
   GI.db.characters[charKey] = nil
   ilvlReady[charKey] = nil
+end
+
+function GI.DeleteSpec(charKey, specID)
+  if not GI.db or not GI.db.characters[charKey] then return end
+  local entry = GI.db.characters[charKey]
+  if not entry.gear or not entry.gear[specID] then return end
+  entry.gear[specID] = nil
+
+  local ch = entry.character
+  if ch and ch.specID == specID then
+    -- Pick fallback spec with the most recent lastUpdate
+    local fallback, fallbackTime = nil, 0
+    for sid, bucket in pairs(entry.gear) do
+      local t = bucket.lastUpdate or 0
+      if t > fallbackTime then
+        fallback     = sid
+        fallbackTime = t
+      end
+    end
+    ch.specID = fallback
+  end
+end
+
+function GI.ConfirmDeleteCharacter(charKey)
+  local d = GI.db and GI.db.characters[charKey]
+  if not d then return end
+  local ch = d.character or {}
+  local r, g, b = GI.ClassRGB(ch.class)
+  local displayName = (ch.name or "?") .. "-" .. (ch.realm or "?")
+  local coloredName = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, displayName)
+  local raceMarkup  = GI.RaceIconMarkup(ch.raceFile, ch.sex)
+  local popup = StaticPopup_Show("GEARINVENTORY_DELETE_CHAR", coloredName)
+  if popup then
+    popup.data = { charKey = charKey, coloredName = coloredName, raceMarkup = raceMarkup }
+  end
 end
 
 -- ─── Events ───────────────────────────────────────────────────────────────────
@@ -390,7 +474,8 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- left combat
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")   -- left combat
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")  -- entered combat
 eventFrame:RegisterEvent("PLAYER_DEAD")
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
@@ -410,7 +495,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     -- Fires after the loading screen; item data is fully available here.
     if pendingLoginScan then
       pendingLoginScan = false
-      C_Timer.After(0.5, function() ScanCharacterGear(true) end)
+      C_Timer.After(0.5, function()
+        ScanCharacterGear(true)
+        GI.WarmUpAllCharacters()
+      end)
     end
 
   elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
@@ -420,6 +508,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     -- Left combat: run the queued scan if one was deferred.
     if pendingScan then
       C_Timer.After(0.5, ScanCharacterGear)
+    end
+
+  elseif event == "PLAYER_REGEN_DISABLED" then
+    -- Entered combat: close main window if open.
+    if GI.mainWindow and GI.mainWindow:IsShown() then
+      GI.mainWindow:Hide()
     end
 
   elseif event == "PLAYER_DEAD" then
@@ -455,17 +549,19 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     end
 
     for pkey, pending in pairs(matched) do
-      local charData = GI.db and GI.db.characters[pending.charKey]
+      local charData   = GI.db and GI.db.characters[pending.charKey]
       local specBucket = charData and pending.specID and charData.gear[pending.specID]
-      local slotData = specBucket and specBucket[pending.slotID]
-      local lookupKey = (slotData and slotData.id == itemID and slotData.link) or itemID
+      local specSlots  = specBucket and specBucket.slots
+      local skey       = "s" .. pending.slotID
+      local slotData   = specSlots and specSlots[skey]
+      local lookupKey  = (slotData and slotData.id == itemID and slotData.link) or itemID
       local name, link, quality, ilvl, _, _, _, _, _, _, _, _, _, _, expacID = C_Item.GetItemInfo(lookupKey)
       if not name then
         name, link, quality, ilvl, _, _, _, _, _, _, _, _, _, _, expacID = C_Item.GetItemInfo(itemID)
       end
       if name then
-        if charData then
-          local slot = specBucket and specBucket[pending.slotID]
+        if charData and specSlots then
+          local slot = specSlots[skey]
           if slot and slot.id == itemID then
             local effectiveIlvl
             local resolvedLink = slot.link or link
@@ -496,11 +592,16 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
                 slot.upRank  = r
               end
             end
-            local fresh = FetchAvgIlvl()
-            if fresh then
-              charData.character.avgIlvl = fresh
-              local cr, cg, cb = GetItemLevelColor()
-              charData.character.avgIlvlColor = { r = cr, g = cg, b = cb }
+            -- FetchAvgIlvl() returns the current player's value only — skip for other chars.
+            local myKey = UnitName("player") and GetRealmName()
+              and (UnitName("player") .. "-" .. GetRealmName()) or nil
+            if pending.charKey == myKey then
+              local fresh = FetchAvgIlvl()
+              if fresh then
+                specBucket.avgIlvl = fresh
+                local cr, cg, cb = GetItemLevelColor()
+                specBucket.avgIlvlColor = { r = cr, g = cg, b = cb }
+              end
             end
           end
         end
@@ -540,7 +641,12 @@ end
 local _L = GI.L
 C_Timer.After(0.5, function()
   print("|cFFFFFFFF---------|r")
-  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r |cFF888888" .. GI.VERSION .. "|r |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
+  local _ver = GI.VERSION or ""
+  local _base, _build = _ver:match("^(.-)#(.+)$")
+  local _verStr = _base and _build
+    and ("|cFFAAAAAA" .. _base .. "|r|cFF888888#" .. _build .. "|r")
+    or  ("|cFFAAAAAA" .. _ver .. "|r")
+  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
   print("    " .. string.format(_L["CMD_TOGGLE"],  _L["ACT_TOGGLE_WINDOW"]))
   print("    " .. string.format(_L["CMD_OPTIONS"], _L["ACT_OPEN_SETTINGS"]))
   print("    " .. string.format(_L["CMD_MINIMAP"], _L["ACT_TOGGLE_MINIMAP"]))

@@ -12,9 +12,14 @@ local CHAR_LIST_W = 180
 
 local BODY_TOP_Y  = -30  -- just below title bar (no portrait)
 local BODY_BOT_Y  = 12   -- bottom inset
-local CHAR_ROW_H  = 28
-local GEAR_ROW_H  = 28
-local INFO_H      = 58   -- char info block + ITEMS label + gaps
+local CHAR_ROW_H        = 28
+local GROUP_HEADER_H    = 14
+local GEAR_ROW_H        = 28
+local INFO_H            = 58   -- char info block + ITEMS label + gaps
+local UPGRADE_STAR_COUNT = 5   -- stars per upgrade track (Iron→Bronze→Silver→Gold)
+
+-- Upgrade rank progress colors (index = upCur rank, 1-based)
+local PROGRESS_COLORS = { "FF4444", "FF8000", "FFFF00", "00FF00", "0080FF", "FFFFFF" }
 -- Fixed height: title + info block + gear rows + bottom inset.
 local FIXED_H = -BODY_TOP_Y + INFO_H
               + #GI.GEAR_SLOTS * GEAR_ROW_H + BODY_BOT_Y
@@ -85,12 +90,60 @@ local function ClassDisplayName(token)
   return token:sub(1, 1) .. token:sub(2):lower()
 end
 
+-- ─── Sort / Group Helpers ─────────────────────────────────────────────────────
+
+local function GetAvgIlvl(data)
+  local ch = data.character or {}
+  local bucket = data.gear and ch.specID and data.gear[ch.specID]
+  return (bucket and bucket.avgIlvl) or 0
+end
+
+local function GetLastUpdated(data)
+  local ch = data.character or {}
+  local bucket = data.gear and ch.specID and data.gear[ch.specID]
+  return (bucket and bucket.lastUpdate) or 0
+end
+
+-- Returns true/false if a < b by ord, nil if equal (enables primary→secondary chaining).
+-- Direction is controlled by the global "sortDir" config: "asc" or "desc".
+local function CompareBy(a, b, ord)
+  local ach = a.data.character or {}
+  local bch = b.data.character or {}
+  local asc = GI.Config.Get("sortDir") == "asc"
+  if ord == "name" then
+    local av, bv = (ach.name or ""), (bch.name or "")
+    if av ~= bv then if asc then return av < bv else return av > bv end end
+  elseif ord == "class" then
+    local av, bv = (ach.class or ""), (bch.class or "")
+    if av ~= bv then if asc then return av < bv else return av > bv end end
+  elseif ord == "level" then
+    local av, bv = (ach.level or 0), (bch.level or 0)
+    if av ~= bv then if asc then return av < bv else return av > bv end end
+  elseif ord == "lastUpdated" then
+    local av, bv = GetLastUpdated(a.data), GetLastUpdated(b.data)
+    if av ~= bv then if asc then return av < bv else return av > bv end end
+  else -- ilvl
+    local av, bv = GetAvgIlvl(a.data), GetAvgIlvl(b.data)
+    if av ~= bv then if asc then return av < bv else return av > bv end end
+  end
+  return nil
+end
+
+local function GetGroupKey(data, groupBy)
+  local ch = data.character or {}
+  if groupBy == "realm"   then return ch.realm or "Unknown" end
+  if groupBy == "faction" then return ch.factionName or ch.faction or "Unknown" end
+  if groupBy == "armor"   then return GI.CLASS_ARMOR[ch.class] or "Unknown" end
+end
+
 -- ─── Widget Pools ─────────────────────────────────────────────────────────────
 
-local gearRows    = {}
-local selectedKey = nil
+local gearRows       = {}
+local selectedKey    = nil
+local collapsedGroups = {}
+local lvlFontSize     = nil  -- computed once from "00" on first render
 
--- ─── Character Tooltip Helpers ────────────────────────────────────────────────
+-- ─── Tooltip Helpers ─────────────────────────────────────────────────────────
 
 -- NineSlice border pieces are Textures directly on GameTooltip (confirmed from error locals)
 local TIP_BORDER_PIECES = {
@@ -103,34 +156,6 @@ local function ColorTipBorder(r, g, b)
     if t then t:SetVertexColor(r, g, b) end
   end
 end
-
--- Overlay: circular race icon (24px), positioned outside the tooltip to the left.
-local tipOverlay
-local function GetTipOverlay()
-  if tipOverlay then return tipOverlay end
-  local f = CreateFrame("Frame", nil, UIParent)
-  f:SetSize(26, 26)
-  f:SetFrameStrata("TOOLTIP")
-  f:Hide()
-
-  local icon = f:CreateTexture(nil, "ARTWORK")
-  icon:SetAllPoints()
-  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  local mask = f:CreateMaskTexture()
-  mask:SetAllPoints(icon)
-  mask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-  icon:AddMaskTexture(mask)
-  local border = f:CreateTexture(nil, "OVERLAY")
-  border:SetSize(28, 28)
-  border:SetPoint("CENTER")
-  border:SetAtlas(GI.ATLAS.RACE_BORDER)
-
-  f.icon   = icon
-  f.border = border
-  tipOverlay = f
-  return f
-end
-
 
 -- ─── Comparison Tooltip Suppression ──────────────────────────────────────────
 -- ShoppingTooltip1/2 are triggered asynchronously via OnTooltipSetItem after
@@ -145,6 +170,92 @@ do
   end
   if ShoppingTooltip1 then ShoppingTooltip1:HookScript("OnShow", SuppressOnShow) end
   if ShoppingTooltip2 then ShoppingTooltip2:HookScript("OnShow", SuppressOnShow) end
+end
+
+-- ─── Tooltip Data Prefetch ───────────────────────────────────────────────────
+-- Called when gear is displayed for a character. Iterates all item links and
+-- requests load for any items not yet in the client cache (gems, nested blocks),
+-- so that C_TooltipInfo.GetHyperlink returns full data on the first hover.
+local function PrefetchLines(lines)
+  if not lines then return end
+  for _, line in ipairs(lines) do
+    local ltype = line.type
+    if ltype == Enum.TooltipDataLineType.GemSocket
+    or ltype == Enum.TooltipDataLineType.GemSocketEnchantment then
+      if line.gemItemID and not line.gemIcon then
+        C_Item.RequestLoadItemDataByID(line.gemItemID)
+      end
+    elseif ltype == Enum.TooltipDataLineType.NestedBlock then
+      -- Recurse into nested blocks (e.g. set bonuses, special effects)
+      PrefetchLines(line.lines)
+    end
+  end
+end
+
+local function PrefetchTooltipData(specSlots)
+  if not specSlots then return end
+  for _, item in pairs(specSlots) do
+    if item.link and item.cached ~= false then
+      local data = C_TooltipInfo.GetHyperlink(item.link)
+      if data then PrefetchLines(data.lines) end
+    end
+  end
+end
+
+-- ─── Custom Item Tooltip Renderer ────────────────────────────────────────────
+-- Renders lines from C_TooltipInfo.GetHyperlink() manually so GameTooltip.Icon
+-- is never set, avoiding the large icon shown above the tooltip frame.
+-- GemSocket lines carry gemIcon directly in the data; SellPrice is rebuilt
+-- from line.price using GetCoinTextureString.
+local function RenderItemTooltip(tooltip, link)
+  local data = C_TooltipInfo.GetHyperlink(link)
+  if not data or not data.lines then
+    tooltip:SetHyperlink(link)
+    return
+  end
+  tooltip:ClearLines()
+  for _, line in ipairs(data.lines) do
+    local lc    = line.leftColor
+    local lr    = lc and lc.r or 1
+    local lg    = lc and lc.g or 1
+    local lb    = lc and lc.b or 1
+    local ltype = line.type
+
+    if ltype == Enum.TooltipDataLineType.ItemName then
+      tooltip:AddDoubleLine(
+        line.leftText or "", data.id and ("ID: " .. data.id) or "",
+        lr, lg, lb,
+        0.35, 0.35, 0.35
+      )
+      local rightFS = _G[tooltip:GetName() .. "TextRight" .. tooltip:NumLines()]
+      if rightFS then
+        local font, _, flags = rightFS:GetFont()
+        rightFS:SetFont(font, 9, flags)
+      end
+    elseif ltype == Enum.TooltipDataLineType.SellPrice then
+      -- if line.price and line.price > 0 then
+      --   tooltip:AddLine(" ")
+      --   tooltip:AddLine(
+      --     (SELL_PRICE or "Sell Price") .. ":  " .. GetCoinTextureString(line.price),
+      --     1, 1, 1
+      --   )
+      -- end
+    elseif line.rightText and line.rightText ~= "" then
+      local rc = line.rightColor
+      tooltip:AddDoubleLine(
+        line.leftText or "", line.rightText,
+        lr, lg, lb,
+        rc and rc.r or 1, rc and rc.g or 1, rc and rc.b or 1
+      )
+    else
+      if ltype == Enum.TooltipDataLineType.GemSocket then
+        local icon = line.gemIcon or "Interface\\ItemSocketingFrame\\UI-EmptySocket-Prismatic"
+        tooltip:AddLine("|T" .. icon .. ":14:14|t  " .. (line.leftText or ""), lr, lg, lb, line.wrapText or false)
+      else
+        tooltip:AddLine(line.leftText or "", lr, lg, lb, line.wrapText or false)
+      end
+    end
+  end
 end
 
 -- ─── Gear Row ─────────────────────────────────────────────────────────────────
@@ -175,15 +286,23 @@ local function GetOrCreateGearRow(idx)
   row.iconBorder = iconBorder
 
   iconBtn:SetScript("OnEnter", function(self)
-    local link = self:GetParent().itemLink
+    local parent = self:GetParent()
+    local link   = parent.itemLink
     if not link then return end
     suppressCompare = true
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetHyperlink(link)
+    if parent.itemData and parent.itemData.cached ~= false then
+      RenderItemTooltip(GameTooltip, link)
+      local qr, qg, qb = QColor(parent.itemData.quality or 1)
+      ColorTipBorder(qr, qg, qb)
+    else
+      GameTooltip:SetHyperlink(link)
+    end
     GameTooltip:Show()
   end)
   iconBtn:SetScript("OnLeave", function()
     suppressCompare = false
+    ColorTipBorder(1, 1, 1)
     GameTooltip:Hide()
   end)
   row.iconBtn = iconBtn
@@ -209,18 +328,294 @@ local function GetOrCreateGearRow(idx)
   slotFS:SetPoint("BOTTOMLEFT", textGroup, "LEFT", 0, 0)
   slotFS:SetPoint("RIGHT")
   slotFS:SetJustifyH("LEFT")
-  slotFS:SetTextColor(0.5, 0.5, 0.5)
+  slotFS:SetTextColor(0.65, 0.65, 0.65)
   row.slotFS = slotFS
 
   local nameFS = textGroup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   nameFS:SetPoint("TOPLEFT", textGroup, "LEFT", 0, 0)
-  nameFS:SetPoint("RIGHT")
+  nameFS:SetPoint("RIGHT", 10, 0)
   nameFS:SetJustifyH("LEFT")
   nameFS:SetWordWrap(false)
   row.nameFS = nameFS
 
   gearRows[idx] = row
   return row
+end
+
+-- ─── Character List Element Factories ────────────────────────────────────────
+
+local function CharList_GroupHeader(btn, nodeArg)
+  if not btn._gi_setup then
+    btn._gi_setup = true
+
+    local bgT = btn:CreateTexture(nil, "BACKGROUND")
+    bgT:SetAllPoints()
+    bgT:SetAtlas("Options_List_Hover")
+    btn.bgT = bgT
+
+    local labelFS = btn:CreateFontString(nil, "OVERLAY")
+    labelFS:SetFont(GameFontNormalSmall:GetFont(), 9)
+    labelFS:SetPoint("LEFT", 8, 0.5)
+    labelFS:SetTextColor(0.9, 0.8, 0.5)
+    btn.labelFS = labelFS
+
+    local arrowT = btn:CreateTexture(nil, "ARTWORK")
+    arrowT:SetSize(12, 12)
+    arrowT:SetPoint("RIGHT", -6, 0)
+    btn.arrowT = arrowT
+
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:SetScript("OnEnter", function(self) self.bgT:SetAtlas("Options_List_Active") end)
+    btn:SetScript("OnLeave", function(self) self.bgT:SetAtlas("Options_List_Hover")  end)
+    btn:SetScript("OnClick", function(self, mouseButton)
+      if not self.groupKey then return end
+      if mouseButton == "RightButton" then
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+          rootDescription:CreateTitle(L["OPT_GROUP_BY"])
+          local function groupGetter(v) return GI.Config.Get("groupBy") == v end
+          local function groupSetter(v) GI.Config.Set("groupBy", v) GI.RefreshCharacterList() end
+          rootDescription:CreateRadio(L["OPT_GROUP_NONE"],    groupGetter, groupSetter, "none")
+          rootDescription:CreateRadio(L["OPT_GROUP_REALM"],   groupGetter, groupSetter, "realm")
+          rootDescription:CreateRadio(L["OPT_GROUP_FACTION"], groupGetter, groupSetter, "faction")
+          rootDescription:CreateRadio(L["OPT_GROUP_ARMOR"],   groupGetter, groupSetter, "armor")
+        end)
+        return
+      end
+      -- Left click: collapse/expand
+      collapsedGroups[self.groupKey] = not collapsedGroups[self.groupKey]
+      GI.RefreshCharacterList()
+    end)
+  end
+
+  if not nodeArg then return end
+  local entry = nodeArg.GetData and nodeArg:GetData() or nodeArg
+  if not entry then return end
+  btn.groupKey = entry.groupKey
+  local collapsed = collapsedGroups[entry.groupKey]
+  btn.arrowT:SetAtlas(collapsed and "glues-characterSelect-icon-plus" or "glues-characterSelect-icon-minus")
+  btn.labelFS:SetText(entry.label:upper() .. " (" .. (entry.count or 0) .. ")")
+end
+
+local function CharList_CharButton(btn, nodeArg)
+  if not btn._gi_setup then
+    btn._gi_setup = true
+
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(0.65, 0.45, 0.10, 0.18)
+
+    local sel = btn:CreateTexture(nil, "BACKGROUND")
+    sel:SetAllPoints()
+    sel:SetColorTexture(0.55, 0.38, 0.08, 0.28)
+    sel:Hide()
+    btn.selBg = sel
+
+    local raceFrame = CreateFrame("Frame", nil, btn)
+    raceFrame:SetSize(22, 22)
+    raceFrame:SetPoint("LEFT", 12, 0)
+
+    local raceIcon = raceFrame:CreateTexture(nil, "ARTWORK")
+    raceIcon:SetAllPoints()
+    raceIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    local raceMask = raceFrame:CreateMaskTexture()
+    raceMask:SetAllPoints(raceIcon)
+    raceMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    raceIcon:AddMaskTexture(raceMask)
+
+    local raceBorder = raceFrame:CreateTexture(nil, "OVERLAY")
+    raceBorder:SetSize(24, 24)
+    raceBorder:SetPoint("CENTER")
+    raceBorder:SetAtlas("talents-node-circle-gray")
+
+    btn.raceIcon   = raceIcon
+    btn.raceBorder = raceBorder
+    btn.raceFrame  = raceFrame
+
+    -- Level badge over race portrait (bottom-left, z-order above border)
+    local lvlBadge = CreateFrame("Frame", nil, btn)
+    lvlBadge:SetSize(16, 16)
+    lvlBadge:SetPoint("BOTTOMLEFT", raceFrame, "BOTTOMLEFT", -6, -4)
+    lvlBadge:SetFrameLevel(raceFrame:GetFrameLevel() + 2)
+
+    local lvlBg = lvlBadge:CreateTexture(nil, "BACKGROUND")
+    lvlBg:SetSize(16, 16)
+    lvlBg:SetPoint("CENTER")
+    lvlBg:SetAtlas("worldquest-Capstone-questmarker-epic-supertrack")
+
+    local lvlFS = lvlBadge:CreateFontString(nil, "ARTWORK")
+    lvlFS:SetFont(GameFontNormal:GetFont(), 9, "OUTLINE")
+    lvlFS:SetTextColor(1, 1, 1)
+    lvlFS:SetPoint("CENTER", 0.2, 0)
+    btn.lvlFS    = lvlFS
+    btn.lvlBadge = lvlBadge
+
+    local lvlRing = lvlBadge:CreateTexture(nil, "BORDER")
+    lvlRing:SetSize(16, 16)
+    lvlRing:SetPoint("CENTER")
+    lvlRing:SetAtlas("worldquest-tracker-ring")
+
+    local nameFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    nameFS:SetPoint("LEFT", raceFrame, "RIGHT", 5, 4)
+    nameFS:SetPoint("RIGHT", -30, 0)
+    nameFS:SetJustifyH("LEFT")
+    nameFS:SetWordWrap(false)
+    btn.nameFS = nameFS
+
+    local realmFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local rFont, rSize = realmFS:GetFont()
+    realmFS:SetFont(rFont, rSize - 2)
+    realmFS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, 0)
+    realmFS:SetPoint("RIGHT", -30, 0)
+    realmFS:SetJustifyH("LEFT")
+    realmFS:SetTextColor(0.45, 0.45, 0.45)
+    btn.realmFS = realmFS
+
+    local ilvlFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ilvlFS:SetPoint("RIGHT", -10, 0)
+    ilvlFS:SetText("0000")
+    local minW = ilvlFS:GetStringWidth()
+    ilvlFS:SetText("")
+    ilvlFS:SetWidth(minW)
+    ilvlFS:SetJustifyH("RIGHT")
+    btn.ilvlFS = ilvlFS
+
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    btn:SetScript("OnClick", function(self, mouseButton)
+      if not self.charKey then return end
+      if mouseButton == "RightButton" then
+        local key = self.charKey
+        local d   = GI.db and GI.db.characters[key]
+        if not d then return end
+        local ch = d.character or {}
+
+        MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+          local r, g, b = GI.ClassRGB(ch.class)
+          local hex = string.format("%02X%02X%02X", r*255, g*255, b*255)
+          local coloredName = "|cFF" .. hex .. (ch.name or "?") .. "|r"
+          rootDescription:CreateTitle(coloredName)
+
+          -- Count saved specs
+          local specList = {}
+          if d.gear then
+            for specID in pairs(d.gear) do
+              local _, specName, _, specIcon = GetSpecializationInfoByID(specID)
+              specList[#specList + 1] = { specID = specID, name = specName or tostring(specID), icon = specIcon }
+            end
+          end
+
+          -- Export character
+          rootDescription:CreateButton(L["CTX_EXPORT_CHAR"], function()
+            local str, err = GI.ExportCharacter(key)
+            if not str then
+              print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["EXPORT_ERR"])
+              return
+            end
+            local raceIcon    = GI.RaceIconMarkup(ch.raceFile, ch.sex)
+            local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
+            local coloredFull = raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
+            print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["EXPORT_OK_CHAR"], coloredFull))
+            StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
+          end)
+
+          rootDescription:CreateSpacer()
+
+          if #specList <= 1 then
+            -- Single spec: simple delete button
+            rootDescription:CreateButton(L["CTX_DELETE_CHAR"], function()
+              GI.ConfirmDeleteCharacter(key)
+            end)
+          else
+            -- Multiple specs: submenu per spec + delete all
+            local delSub = rootDescription:CreateButton(L["CTX_DELETE_CHAR"])
+            for _, spec in ipairs(specList) do
+              local sid  = spec.specID
+              local sName = spec.name
+              local sIcon = spec.icon
+              delSub:CreateButton(sName, function()
+                local coloredSpec = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, sName)
+                local popup = StaticPopup_Show("GEARINVENTORY_DELETE_SPEC", coloredSpec, coloredName)
+                if popup then
+                  popup.data = {
+                    charKey     = key,
+                    specID      = sid,
+                    specName    = sName,
+                    specIcon    = sIcon,
+                    raceFile    = ch.raceFile,
+                    sex         = ch.sex,
+                    coloredName = coloredName,
+                    coloredSpec = coloredSpec,
+                  }
+                end
+              end)
+            end
+            delSub:CreateDivider()
+            delSub:CreateButton(L["CTX_DELETE_CHAR"], function()
+              GI.ConfirmDeleteCharacter(key)
+            end)
+          end
+        end)
+        return
+      end
+      -- Left click: select character
+      selectedKey = self.charKey
+      GI.ShowCharacterGear(self.charKey)
+    end)
+
+  end
+
+  -- Data population (runs every render)
+  if not nodeArg then return end
+  local entry = nodeArg.GetData and nodeArg:GetData() or nodeArg
+  if not entry or not entry.key then return end
+  local d  = entry.data
+  local ch = d.character or {}
+  btn.charKey = entry.key
+
+  local r, g, b = GI.ClassRGB(ch.class)
+  btn.nameFS:SetText(ch.name or "?")
+  btn.nameFS:SetTextColor(r, g, b)
+  btn.raceBorder:SetVertexColor(r, g, b)
+  btn.realmFS:SetText(ch.realm or "")
+
+  local ready      = GI.IsIlvlReady(entry.key)
+  local listBucket = d.gear and ch.specID and d.gear[ch.specID]
+  if listBucket and listBucket.avgIlvl ~= nil then
+    local suffix = not ready and "|cFF666666~|r" or ""
+    btn.ilvlFS:SetText(IlvlColorCode(listBucket) .. listBucket.avgIlvl .. "|r" .. suffix)
+  elseif not ready then
+    btn.ilvlFS:SetText("|cFF666666...|r")
+  else
+    btn.ilvlFS:SetText("|cFF666666?|r")
+  end
+
+  local raceAtlas = GI.RaceAtlas(ch.raceFile, ch.sex)
+  if raceAtlas then
+    btn.raceIcon:SetAtlas(raceAtlas)
+    btn.raceIcon:Show()
+  else
+    btn.raceIcon:Hide()
+  end
+
+  -- Level badge: compute font size once from "00", cache in lvlFontSize
+  do
+    local font, _, flags = btn.lvlFS:GetFont()
+    if not lvlFontSize then
+      local maxPt   = 9
+      local targetW = btn.lvlBadge:GetWidth() - 5
+      btn.lvlFS:SetFont(font, maxPt, flags)
+      btn.lvlFS:SetText("00")
+      local w = btn.lvlFS:GetStringWidth()
+      lvlFontSize = (w > 0 and w > targetW)
+        and math.max(5, math.floor(maxPt * targetW / w) - 1)
+        or  (maxPt - 1)
+    end
+    btn.lvlFS:SetFont(font, lvlFontSize, flags)
+    btn.lvlFS:SetText(tostring(ch.level or ""))
+  end
+
+  btn.selBg:SetShown(entry.key == selectedKey)
 end
 
 -- ─── Main Window Creation ─────────────────────────────────────────────────────
@@ -250,11 +645,202 @@ local function CreateMainWindow()
   f.TitleContainer:SetPoint("TOPRIGHT", -24, 0)
   f.CloseButton:SetScript("OnClick", function() f:Hide() end)
 
-  local versionFS = f.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  local vFont, vSize = versionFS:GetFont()
-  versionFS:SetFont(vFont, vSize - 2)
-  versionFS:SetPoint("RIGHT", f.CloseButton, "LEFT", -4, 0)
-  versionFS:SetText("|cFF555555v" .. GI.VERSION .. "|r")
+  -- Settings gear dropdown (left of CloseButton)
+  local settingsDropdown = CreateFrame("DropdownButton", nil, f, "UIPanelIconDropdownButtonTemplate")
+  settingsDropdown:SetFrameLevel(f.CloseButton:GetFrameLevel() + 2)
+  settingsDropdown:SetPoint("RIGHT", f.CloseButton, "LEFT", -4, 0)
+  settingsDropdown:SetupMenu(function(_, rootDescription)
+    rootDescription:SetTag("MENU_GI_SETTINGS")
+
+    -- ── Sort by ───────────────────────────────────────────────────────────────
+    local sortSub = rootDescription:CreateButton(L["OPT_SORT_BY"])
+
+    sortSub:CreateTitle(L["OPT_SORT_DIR"])
+    local function dirGetter(v) return GI.Config.Get("sortDir") == v end
+    local function dirSetter(v) GI.Config.Set("sortDir", v) GI.RefreshCharacterList() end
+    sortSub:CreateRadio(L["OPT_SORT_ASC"],  dirGetter, dirSetter, "asc")
+      :SetResponder(function(data, _, _) dirSetter(data) return MenuResponse.Refresh end)
+    sortSub:CreateRadio(L["OPT_SORT_DESC"], dirGetter, dirSetter, "desc")
+      :SetResponder(function(data, _, _) dirSetter(data) return MenuResponse.Refresh end)
+
+    sortSub:CreateSpacer()
+    sortSub:CreateTitle(L["OPT_SORT_PRIMARY"])
+    local function sortGetter(v) return GI.Config.Get("sortOrder") == v end
+    local function sortSetter(v)
+      GI.Config.Set("sortOrder", v)
+      if GI.Config.Get("secondarySort") == v then
+        GI.Config.Set("secondarySort", "none")
+      end
+      GI.RefreshCharacterList()
+    end
+    local primaryKeys = { "name", "class", "level", "ilvl", "lastUpdated" }
+    local primaryLabels = {
+      name        = L["OPT_SORT_NAME"],
+      class       = L["OPT_SORT_CLASS"],
+      level       = L["OPT_SORT_LEVEL"],
+      ilvl        = L["OPT_SORT_ILVL"],
+      lastUpdated = L["OPT_SORT_LAST_UPDATED"],
+    }
+    for _, v in ipairs(primaryKeys) do
+      sortSub:CreateRadio(primaryLabels[v], sortGetter, sortSetter, v)
+        :SetResponder(function(data, _, _)
+          sortSetter(data)
+          return MenuResponse.Refresh
+        end)
+    end
+
+    sortSub:CreateSpacer()
+    sortSub:CreateTitle(L["OPT_SORT_SECONDARY"])
+    local function secGetter(v) return GI.Config.Get("secondarySort") == v end
+    local function secSetter(v) GI.Config.Set("secondarySort", v) GI.RefreshCharacterList() end
+    local secKeys = {
+      { "none",        L["OPT_SORT_NONE"]         },
+      { "name",        L["OPT_SORT_NAME"]         },
+      { "class",       L["OPT_SORT_CLASS"]        },
+      { "level",       L["OPT_SORT_LEVEL"]        },
+      { "ilvl",        L["OPT_SORT_ILVL"]         },
+      { "lastUpdated", L["OPT_SORT_LAST_UPDATED"] },
+    }
+    for _, opt in ipairs(secKeys) do
+      local radio = sortSub:CreateRadio(opt[2], secGetter, secSetter, opt[1])
+      radio:SetResponder(function(data, _, _)
+        secSetter(data)
+        return MenuResponse.Refresh
+      end)
+      if opt[1] ~= "none" then
+        radio:SetEnabled(function() return GI.Config.Get("sortOrder") ~= opt[1] end)
+      end
+    end
+
+    rootDescription:CreateSpacer()
+
+    -- ── Minimap ───────────────────────────────────────────────────────────────
+    rootDescription:CreateCheckbox(
+      L["OPT_SHOW_MINIMAP"],
+      function() return GI.db and GI.db.config and GI.db.config.minimapButton
+                     and not GI.db.config.minimapButton.hide end,
+      function() GI.ToggleMinimapButton() end
+    )
+
+    -- ── Items ─────────────────────────────────────────────────────────────────
+    rootDescription:CreateCheckbox(
+      L["OPT_COLOR_UPGRADE"],
+      function() return GI.Config.Get("colorUpgradeRank") ~= false end,
+      function() GI.Config.Set("colorUpgradeRank", GI.Config.Get("colorUpgradeRank") == false) end
+    )
+    rootDescription:CreateCheckbox(
+      L["OPT_COLOR_STARS"],
+      function() return GI.Config.Get("colorUpgradeStars") ~= false end,
+      function() GI.Config.Set("colorUpgradeStars", GI.Config.Get("colorUpgradeStars") == false) end
+    )
+
+    rootDescription:CreateSpacer()
+
+    -- ── Export / Import ───────────────────────────────────────────────────────
+    rootDescription:CreateButton(L["IMPORT"], function()
+      StaticPopup_Show("GEARINVENTORY_IMPORT")
+    end)
+
+    rootDescription:CreateButton(L["EXPORT_ALL"], function()
+      local str, err = GI.ExportAll()
+      if not str then
+        print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["EXPORT_ERR"])
+        return
+      end
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["EXPORT_OK_FULL"])
+      StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
+    end)
+
+    rootDescription:CreateSpacer()
+
+    rootDescription:CreateButton(L["DELETE_ALL_CHARS"], function()
+      StaticPopup_Show("GEARINVENTORY_DELETE_ALL")
+    end)
+
+  end)
+
+  -- Character jump button (left side of title bar) — selects the current player's character
+  local charJumpBtn = CreateFrame("Button", nil, f)
+  charJumpBtn:SetSize(28, 28)
+  charJumpBtn:SetFrameLevel(f.CloseButton:GetFrameLevel() + 2)
+  charJumpBtn:SetPoint("TOPLEFT", f, "TOPLEFT", -4, 2)
+  charJumpBtn:Hide()
+
+  local cjBg = charJumpBtn:CreateTexture(nil, "BACKGROUND")
+  cjBg:SetSize(26, 26)
+  cjBg:SetPoint("CENTER")
+  cjBg:SetColorTexture(0, 0, 0, 1)
+
+  local cjBgMask = charJumpBtn:CreateMaskTexture()
+  cjBgMask:SetAllPoints(cjBg)
+  cjBgMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  cjBg:AddMaskTexture(cjBgMask)
+
+  local cjIcon = charJumpBtn:CreateTexture(nil, "ARTWORK")
+  cjIcon:SetSize(22, 22)
+  cjIcon:SetPoint("CENTER")
+  cjIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+  local cjMask = charJumpBtn:CreateMaskTexture()
+  cjMask:SetAllPoints(cjIcon)
+  cjMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  cjIcon:AddMaskTexture(cjMask)
+
+  -- Border stays fixed; recolored gold on hover via OnEnter/OnLeave
+  local cjBorder = charJumpBtn:CreateTexture(nil, "OVERLAY")
+  cjBorder:SetSize(26, 26)
+  cjBorder:SetPoint("CENTER")
+  cjBorder:SetAtlas("talents-node-circle-gray")
+
+  local cjClassR, cjClassG, cjClassB = 1, 1, 1  -- cached class color for hover restore
+
+  local function RefreshCharJumpBtn()
+    if not GI.db then charJumpBtn:Hide() return end
+    local key = UnitName("player") .. "-" .. GetRealmName()
+    local d   = GI.db.characters[key]
+    local ch  = d and d.character
+    if not ch then charJumpBtn:Hide() return end
+    cjClassR, cjClassG, cjClassB = GI.ClassRGB(ch.class)
+    local atlas = GI.RaceAtlas(ch.raceFile, ch.sex)
+    if atlas then
+      cjIcon:SetAtlas(atlas)
+      cjIcon:Show()
+    else
+      cjIcon:Hide()
+    end
+    cjBorder:SetVertexColor(cjClassR, cjClassG, cjClassB)
+    charJumpBtn:Show()
+  end
+
+  -- Only icon shifts and darkens on press; border stays in place
+  charJumpBtn:SetScript("OnMouseDown", function()
+    cjIcon:SetPoint("CENTER", 1, -1)
+    cjIcon:SetVertexColor(0.55, 0.55, 0.55)
+  end)
+  charJumpBtn:SetScript("OnMouseUp", function()
+    cjIcon:SetPoint("CENTER", 0, 0)
+    cjIcon:SetVertexColor(1, 1, 1)
+  end)
+  charJumpBtn:SetScript("OnEnter", function()
+    cjBorder:SetVertexColor(1, 0.82, 0)
+  end)
+  charJumpBtn:SetScript("OnLeave", function()
+    cjBorder:SetVertexColor(cjClassR, cjClassG, cjClassB)
+  end)
+
+  charJumpBtn:SetScript("OnClick", function()
+    local key = UnitName("player") .. "-" .. GetRealmName()
+    if not (GI.db and GI.db.characters[key]) then return end
+    PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    GI.ShowCharacterGear(key)
+    GI.RefreshCharacterList()
+    f.charScrollBox:ScrollToElementDataByPredicate(function(data)
+      return not data.isHeader and data.key == key
+    end, ScrollBoxConstants.AlignBegin, 0, true)
+  end)
+
+  f:HookScript("OnShow", RefreshCharJumpBtn)
+  GI.RefreshCharJumpBtn = RefreshCharJumpBtn
 
   tinsert(UISpecialFrames, "GearInventoryMainFrame")
 
@@ -281,218 +867,15 @@ local function CreateMainWindow()
   charSB:SetScale(0.70)
 
   local charView = CreateScrollBoxListLinearView()
-  charView:SetElementExtent(CHAR_ROW_H)
+  charView:SetElementExtentCalculator(function(_, node)
+    return (node and node.isHeader) and GROUP_HEADER_H or CHAR_ROW_H
+  end)
   charView:SetElementFactory(function(factory, node)
-    -- GICharButtonTemplate — Button, определён в Addons/templates.xml
-    factory("GICharButtonTemplate", function(btn, nodeArg)
-      if not btn._gi_setup then
-        btn._gi_setup = true
-
-        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints()
-        hl:SetColorTexture(0.65, 0.45, 0.10, 0.18)
-
-        local sel = btn:CreateTexture(nil, "BACKGROUND")
-        sel:SetAllPoints()
-        sel:SetColorTexture(0.55, 0.38, 0.08, 0.28)
-        sel:Hide()
-        btn.selBg = sel
-
-        local raceFrame = CreateFrame("Frame", nil, btn)
-        raceFrame:SetSize(18, 18)
-        raceFrame:SetPoint("LEFT", 12, 0)
-
-        local raceIcon = raceFrame:CreateTexture(nil, "ARTWORK")
-        raceIcon:SetAllPoints()
-        raceIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-        local raceMask = raceFrame:CreateMaskTexture()
-        raceMask:SetAllPoints(raceIcon)
-        raceMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        raceIcon:AddMaskTexture(raceMask)
-
-        local raceBorder = raceFrame:CreateTexture(nil, "OVERLAY")
-        raceBorder:SetSize(20, 20)
-        raceBorder:SetPoint("CENTER")
-        raceBorder:SetAtlas("talents-node-circle-gray")
-
-        btn.raceIcon = raceIcon
-        btn.raceBorder = raceBorder
-        btn.raceFrame = raceFrame
-
-
-        local nameFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        nameFS:SetPoint("LEFT", 34, 0)
-        nameFS:SetPoint("RIGHT", -54, 0)
-        nameFS:SetPoint("BOTTOM", btn, "CENTER", 0, -2)
-        nameFS:SetJustifyH("LEFT")
-        nameFS:SetWordWrap(false)
-        btn.nameFS = nameFS
-
-        local realmFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        local rFont, rSize = realmFS:GetFont()
-        realmFS:SetFont(rFont, rSize - 2)
-        realmFS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, 0)
-        realmFS:SetPoint("RIGHT", -54, 0)
-        realmFS:SetJustifyH("LEFT")
-        realmFS:SetTextColor(0.45, 0.45, 0.45)
-        btn.realmFS = realmFS
-
-        local ilvlFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        ilvlFS:SetPoint("RIGHT", -14, 0)
-        ilvlFS:SetText("000")
-        local minW = ilvlFS:GetStringWidth()
-        ilvlFS:SetText("")
-        ilvlFS:SetWidth(minW)
-        ilvlFS:SetJustifyH("RIGHT")
-        btn.ilvlFS = ilvlFS
-
-        btn:SetScript("OnClick", function(self)
-          if not self.charKey then return end
-          selectedKey = self.charKey
-          GI.ShowCharacterGear(self.charKey)
-        end)
-
-        btn:SetScript("OnEnter", function(self)
-          if not self.charKey or not GI.db then return end
-          local d = GI.db.characters[self.charKey]
-          if not d then return end
-          local ch = d.character or {}
-
-          local r, g, b = GI.ClassRGB(ch.class)
-          local cHex = string.format("%02X%02X%02X", r*255, g*255, b*255)
-
-          -- Tooltip right edge at button left edge, vertically centered
-          GameTooltip:SetOwner(self, "ANCHOR_NONE")
-          GameTooltip:ClearAllPoints()
-          GameTooltip:SetPoint("RIGHT", self, "LEFT", -4, 0)
-
-          local className = ch.className or (GI.CLASS_DISPLAY and GI.CLASS_DISPLAY[ch.class]) or (ch.class or "?")
-
-          -- Line 1: Name-Realm (same class color for both)
-          GameTooltip:AddLine(
-            "|cFF" .. cHex .. (ch.name or "?") .. "-" .. (ch.realm or "") .. "|r",
-            1, 1, 1, true)
-
-          -- Line 2: empty separator
-          GameTooltip:AddLine(" ")
-
-          -- Line 3: Level (light gray)  Race (white)  Class (class color)
-          local raceName = ch.raceName or ch.raceFile or "?"
-          GameTooltip:AddLine(
-            "|cFFAAAAAA" .. (ch.level or "?") .. "|r "
-            .. "|cFFFFFFFF" .. raceName .. "|r "
-            .. "|cFF" .. cHex .. className .. "|r",
-            1, 1, 1)
-
-          -- Line 4: Faction icon + name
-          if ch.faction then
-            local factionName = ch.factionName or ch.faction
-            local fAtlas = ch.faction == "Horde"
-              and GI.ATLAS.FACTION_HORDE
-              or  GI.ATLAS.FACTION_ALLIANCE
-            GameTooltip:AddLine(
-              "|A:" .. fAtlas .. ":14:14|a |cFFFFFFFF" .. factionName .. "|r",
-              1, 1, 1)
-          end
-
-          -- Line 5: empty separator
-          GameTooltip:AddLine(" ")
-
-          -- Line 5: Spec (yellow label, role icon, spec icon, spec name class color)
-          if ch.specID then
-            local _, sName, _, sIcon = GetSpecializationInfoByID(ch.specID)
-            local specStr = sIcon and ("|T" .. sIcon .. ":14:14|t") or ""
-            GameTooltip:AddLine(
-              "|cFFFFD100Spec:|r " .. specStr .. " |cFF" .. cHex .. (sName or "?") .. "|r",
-              1, 1, 1)
-          end
-
-          -- Line 6: Saved Specs (yellow label + spec icons)
-          if d.gear then
-            local specIcons = {}
-            for specKey in pairs(d.gear) do
-              if specKey ~= 0 then
-                local _, _, _, sIcon = GetSpecializationInfoByID(specKey)
-                if sIcon then
-                  table.insert(specIcons, "|T" .. sIcon .. ":14:14|t")
-                end
-              end
-            end
-            if #specIcons > 1 then
-              table.sort(specIcons)
-              GameTooltip:AddLine(
-                "|cFFFFD100" .. L["TOOLTIP_SAVED_SPECS"] .. "|r " .. table.concat(specIcons, " "),
-                1, 1, 1)
-            end
-          end
-
-          -- Line 7: Avg. iLvl (yellow label, colored value)
-          local ilvlStr = ch.avgIlvl and (IlvlColorCode(ch) .. ch.avgIlvl .. "|r") or "|cFF888888?|r"
-          GameTooltip:AddLine("|cFFFFD100Avg. iLvl:|r " .. ilvlStr, 1, 1, 1)
-
-          GameTooltip:Show()
-
-          -- Color border
-          ColorTipBorder(r, g, b)
-
-          -- Race icon overlay — outside tooltip to the left
-          local overlay = GetTipOverlay()
-          local raceAtlas = GI.RaceAtlas(ch.raceFile, ch.sex)
-          if raceAtlas then
-            overlay.icon:SetAtlas(raceAtlas)
-            overlay.border:SetVertexColor(r, g, b)
-            overlay:ClearAllPoints()
-            overlay:SetPoint("TOPRIGHT", GameTooltip, "TOPLEFT", -2, -1)
-            overlay:Show()
-          else
-            overlay:Hide()
-          end
-
-        end)
-
-        btn:SetScript("OnLeave", function()
-          ColorTipBorder(1, 1, 1)
-          GetTipOverlay():Hide()
-          GameTooltip:Hide()
-        end)
-      end
-
-      -- nodeArg — DataProvider node, переданный WoW при каждом рендере
-      if not nodeArg then return end
-      local entry = nodeArg.GetData and nodeArg:GetData() or nodeArg
-      if not entry or not entry.key then return end
-      local d = entry.data
-      local ch = d.character or {}
-      btn.charKey = entry.key
-
-      local r, g, b2    = GI.ClassRGB(ch.class)
-      btn.nameFS:SetText(ch.name or "?")
-      btn.nameFS:SetTextColor(r, g, b2)
-      btn.raceBorder:SetVertexColor(r, g, b2)
-      btn.realmFS:SetText(ch.realm or "")
-
-      local ready = GI.IsIlvlReady(entry.key)
-      if ch.avgIlvl ~= nil then
-        local suffix = not ready and "|cFF666666~|r" or ""
-        btn.ilvlFS:SetText(IlvlColorCode(ch) .. ch.avgIlvl .. "|r" .. suffix)
-      elseif not ready then
-        btn.ilvlFS:SetText("|cFF666666...|r")
-      else
-        btn.ilvlFS:SetText("|cFF666666?|r")
-      end
-
-      local raceAtlas = GI.RaceAtlas(ch.raceFile, ch.sex)
-      if raceAtlas then
-        btn.raceIcon:SetAtlas(raceAtlas)
-        btn.raceIcon:Show()
-      else
-        btn.raceIcon:Hide()
-      end
-
-
-      btn.selBg:SetShown(entry.key == selectedKey)
-    end)
+    if node and node.isHeader then
+      factory("GIGroupHeaderTemplate", CharList_GroupHeader)
+    else
+      factory("GICharButtonTemplate",  CharList_CharButton)
+    end
   end)
 
   ScrollUtil.InitScrollBoxListWithScrollBar(charSF, charSB, charView)
@@ -501,7 +884,7 @@ local function CreateMainWindow()
 
   -- ── Right panel: char info + gear list ──────────────────────────────────────
 
-  local rightX = 14  -- offset from charSB right edge
+  local rightX = 10  -- offset from charSB right edge
 
   -- Character info block
   local charNameFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -538,6 +921,13 @@ local function CreateMainWindow()
   f.gearScrollChild = gearSC
 
   GI.mainWindow = f
+
+  GI.OnConfigChanged = function(key)
+    if (key == "colorUpgradeRank" or key == "colorUpgradeStars") and selectedKey then
+      GI.ShowCharacterGear(selectedKey)
+    end
+  end
+
   return f
 end
 
@@ -547,26 +937,60 @@ function GI.RefreshCharacterList()
   local w = GI.mainWindow
   if not w or not GI.db then return end
 
-  local order = GI.db.config and GI.db.config.sortOrder or "ilvl"
+  local order     = GI.db.config and GI.db.config.sortOrder     or "ilvl"
+  local secondary = GI.db.config and GI.db.config.secondarySort or "none"
 
   local sorted = {}
   for key, data in pairs(GI.db.characters) do
     table.insert(sorted, { key = key, data = data })
   end
+
   table.sort(sorted, function(a, b)
-    local ach = a.data.character or {}
-    local bch = b.data.character or {}
-    if order == "name" then
-      return (ach.name or "") < (bch.name or "")
-    elseif order == "class" then
-      return (ach.class or "") < (bch.class or "")
-    else
-      return (ach.avgIlvl or 0) > (bch.avgIlvl or 0)
+    local r = CompareBy(a, b, order)
+    if r ~= nil then return r end
+    if secondary ~= "none" and secondary ~= order then
+      local r2 = CompareBy(a, b, secondary)
+      if r2 ~= nil then return r2 end
     end
+    return false
   end)
 
+  local groupBy = GI.db.config and GI.db.config.groupBy or "none"
+
+  local result = {}
+
+  if groupBy == "none" then
+    table.insert(result, { isHeader = true, groupKey = "_all", label = L["PANEL_CHARACTERS"], count = #sorted })
+    if not collapsedGroups["_all"] then
+      for _, entry in ipairs(sorted) do
+        table.insert(result, entry)
+      end
+    end
+  else
+    local groups     = {}
+    local groupOrder = {}
+    for _, entry in ipairs(sorted) do
+      local gk = GetGroupKey(entry.data, groupBy)
+      if not groups[gk] then
+        groups[gk] = {}
+        table.insert(groupOrder, gk)
+      end
+      table.insert(groups[gk], entry)
+    end
+    table.sort(groupOrder)
+    for _, gk in ipairs(groupOrder) do
+      local members = groups[gk]
+      table.insert(result, { isHeader = true, groupKey = gk, label = gk, count = #members })
+      if not collapsedGroups[gk] then
+        for _, entry in ipairs(members) do
+          table.insert(result, entry)
+        end
+      end
+    end
+  end
+
   local scrollPct = w.charScrollBox:GetScrollPercentage()
-  w.charScrollBox:SetDataProvider(CreateDataProvider(sorted))
+  w.charScrollBox:SetDataProvider(CreateDataProvider(result))
   if scrollPct then
     w.charScrollBox:SetScrollPercentage(scrollPct, true)
   end
@@ -599,34 +1023,36 @@ function GI.ShowCharacterGear(charKey)
     "%s|cFF%02X%02X%02X%s|r%s",
     raceMarkup, rH, gH, bH, ch.name or "?", realmSuffix)
 
+  -- Gear rows
+  local specIDKey  = ch.specID or 0
+  local specBucket = d.gear and d.gear[specIDKey]
+  local specSlots  = specBucket and specBucket.slots
+
   -- Character info line (class, level, avg ilvl, last update)
   local ready = GI.IsIlvlReady(charKey)
   local ilvlPart
-  if ch.avgIlvl ~= nil then
+  local avgIlvl = (specBucket and specBucket.avgIlvl) or 0
+  if specBucket and specBucket.avgIlvl ~= nil then
     local marker = not ready and " |cFF666666~|r" or ""
-    ilvlPart = "  " .. string.format(L["CHAR_AVG_ILVL"], IlvlColorCode(ch) .. ch.avgIlvl .. "|r") .. marker
+    ilvlPart = "  " .. string.format(L["CHAR_AVG_ILVL"], IlvlColorCode(specBucket) .. specBucket.avgIlvl .. "|r") .. marker
   elseif not ready then
     ilvlPart = "  |cFF666666...|r"
   else
     ilvlPart = ""
   end
-  local agePart = "  |cFF888888" .. FormatAge(ch.lastUpdate) .. "|r"
+  local agePart = "  |cFF888888" .. FormatAge(specBucket and specBucket.lastUpdate) .. "|r"
   w.charInfoFS:SetFormattedText(
     "|cFF%02X%02X%02X%s|r  |cFFFFFFFF\226\128\162 " .. L["CHAR_LEVEL"] .. "|r%s%s",
     rH, gH, bH, ClassDisplayName(ch.class),
     ch.level or 0, ilvlPart, agePart)
 
+  PrefetchTooltipData(specSlots)
 
-  -- Gear rows
   for _, row in ipairs(gearRows) do row:Hide() end
-
-  local avgIlvl = ch.avgIlvl or 0
-  local specIDKey = ch.specID or 0
-  local specGear = d.gear and d.gear[specIDKey]
 
   for i, slot in ipairs(GI.GEAR_SLOTS) do
     local row  = GetOrCreateGearRow(i)
-    local item = specGear and specGear[slot.id]
+    local item = specSlots and specSlots["s" .. slot.id]
 
     row.slotData = slot
     row.avgIlvl  = avgIlvl
@@ -637,16 +1063,14 @@ function GI.ShowCharacterGear(charKey)
       row.iconT:SetTexture(item.icon or EMPTY_SLOT_ICON[slot.id])
       row.iconT:SetAlpha(item.cached == false and 0.45 or 1.0)
 
+      local qr, qg, qb = QColor(item.quality or 1)
+
       row.nameFS:SetText(item.name or "?")
       if item.cached == false then
         row.nameFS:SetTextColor(0.5, 0.5, 0.5)
       else
-        local qr, qg, qb = QColor(item.quality or 1)
         row.nameFS:SetTextColor(qr, qg, qb)
       end
-
-      local qr, qg, qb = QColor(item.quality or 1)
-      local qHex = string.format("%02X%02X%02X", qr * 255, qg * 255, qb * 255)
 
       -- iLvl badge on icon — colored by item quality
       if (item.ilvl or 0) > 0 then
@@ -667,7 +1091,6 @@ function GI.ShowCharacterGear(charKey)
       -- Slot name + upgrade track
       if item.upTrack then
         local rank = item.upRank or 1
-        local maxRank = 5
         -- Star texture by tier (if enabled): 1=iron, 2-3=bronze, 4=silver, 5=gold
         local filledTex
         if GI.Config.Get("colorUpgradeStars") ~= false then
@@ -681,11 +1104,10 @@ function GI.ShowCharacterGear(charKey)
         local S = "|T" .. filledTex          .. ":10:10|t"
         local E = "|T" .. GI.TEX.STAR_EMPTY .. ":10:10|t"
         local allStars = {}
-        for i = 1, maxRank do
+        for i = 1, UPGRADE_STAR_COUNT do
           allStars[i] = (i <= rank) and S or E
         end
         local stars = table.concat(allStars, " ")
-        local PROGRESS_COLORS = { "FF4444", "FF8000", "FFFF00", "00FF00", "0080FF", "FFFFFF" }
         local progressHex = GI.Config.Get("colorUpgradeRank") ~= false
           and (PROGRESS_COLORS[math.min(item.upCur, #PROGRESS_COLORS)] or "AAAAAA")
           or "AAAAAA"
@@ -715,42 +1137,20 @@ end
 
 -- ─── Delete Character ───────────────────────────────────────────────────────
 
-StaticPopupDialogs["GEARINVENTORY_DELETE_CHAR"] = {
-  text = L["DELETE_CONFIRM"],
-  button1 = YES,
-  button2 = NO,
-  OnAccept = function(self)
-    local charKey = self.data
-    GI.DeleteCharacter(charKey)
-    if selectedKey == charKey then
-      selectedKey = nil
-      local w = GI.mainWindow
-      if w then
-        w.charNameFS:SetText("|cFF555555" .. L["HINT_SELECT_CHAR"] .. "|r")
-        w.charInfoFS:SetText("")
+-- Resets main window selection state when a character is deleted.
+-- Called from StaticPopupDialogs["GEARINVENTORY_DELETE_CHAR"] in characters.lua.
+function GI.IsMainWindowSelection(charKey)
+  return selectedKey == charKey
+end
 
-        for _, row in ipairs(gearRows) do row:Hide() end
-      end
-    end
-    GI.RefreshCharacterList()
-    if GI.RefreshOptionsCharList then
-      GI.RefreshOptionsCharList()
-    end
-  end,
-  timeout = 0,
-  whileDead = true,
-  hideOnEscape = true,
-  preferredIndex = 3,
-}
-
-function GI.ConfirmDeleteCharacter(charKey)
-  local d = GI.db and GI.db.characters[charKey]
-  if not d then return end
-  local ch = d.character or {}
-  local popup = StaticPopup_Show("GEARINVENTORY_DELETE_CHAR",
-    (ch.name or "?") .. "-" .. (ch.realm or "?"))
-  if popup then
-    popup.data = charKey
+function GI.ClearMainWindowSelection(charKey)
+  if selectedKey ~= charKey then return end
+  selectedKey = nil
+  local w = GI.mainWindow
+  if w then
+    w.charNameFS:SetText("|cFF555555" .. L["HINT_SELECT_CHAR"] .. "|r")
+    w.charInfoFS:SetText("")
+    for _, row in ipairs(gearRows) do row:Hide() end
   end
 end
 
@@ -768,15 +1168,30 @@ function GI.ToggleMainWindow()
   local w = GI.mainWindow
 
   if not w:IsShown() then
+    if InCombatLockdown() then return end
     w:Show()
     w:Raise()
+    -- Prefetch tooltip data for all saved characters so gem icons are ready on first hover
+    if GI.db and GI.db.characters then
+      for _, d in pairs(GI.db.characters) do
+        local specID = d.character and d.character.specID
+        local slots  = specID and d.gear and d.gear[specID] and d.gear[specID].slots
+        PrefetchTooltipData(slots)
+      end
+    end
     GI.RefreshCharacterList()
     if selectedKey and GI.db and GI.db.characters[selectedKey] then
       GI.ShowCharacterGear(selectedKey)
+      w.charScrollBox:ScrollToElementDataByPredicate(function(data)
+        return not data.isHeader and data.key == selectedKey
+      end, ScrollBoxConstants.AlignBegin, 0, true)
     elseif GI.db then
       local key = UnitName("player") .. "-" .. GetRealmName()
       if GI.db.characters[key] then
         GI.ShowCharacterGear(key)
+        w.charScrollBox:ScrollToElementDataByPredicate(function(data)
+          return not data.isHeader and data.key == key
+        end, ScrollBoxConstants.AlignBegin, 0, true)
       end
     end
   else
@@ -795,7 +1210,137 @@ GI.OnCharacterDataUpdated = function(charKey)
   local w = GI.mainWindow
   if not w or not w:IsShown() then return end
   GI.RefreshCharacterList()
+  if GI.RefreshCharJumpBtn then GI.RefreshCharJumpBtn() end
   if charKey == selectedKey then
     GI.ShowCharacterGear(charKey)
   end
 end
+
+-- ─── Export / Import Dialogs ─────────────────────────────────────────────────
+
+-- Returns "[class icon] Name-Realm" colored by class for import/export print messages.
+local function CharImportMarkup(charKey)
+  local d  = GI.db and GI.db.characters[charKey]
+  local ch = d and d.character
+  if not ch then return "|cFFFFFFFF" .. charKey .. "|r" end
+  local r, g, b     = GI.ClassRGB(ch.class)
+  local raceIcon    = GI.RaceIconMarkup(ch.raceFile, ch.sex)
+  local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
+  return raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
+end
+
+StaticPopupDialogs["GEARINVENTORY_DELETE_ALL"] = {
+  text          = L["DELETE_ALL_CONFIRM"],
+  button1       = YES,
+  button2       = NO,
+  OnAccept      = function()
+    GI.DeleteAllCharacters()
+    GI.ClearMainWindowSelection()
+    GI.RefreshCharacterList()
+    if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
+  end,
+  timeout       = 0,
+  whileDead     = true,
+  hideOnEscape  = true,
+  preferredIndex = 3,
+}
+
+-- Shows the encoded string; user selects all and copies.
+StaticPopupDialogs["GEARINVENTORY_EXPORT"] = {
+  text     = L["EXPORT_HINT"],
+  button1  = CLOSE,
+  hasEditBox   = true,
+  editBoxWidth = 360,
+  OnShow   = function(self)
+    self.EditBox:SetText(self.data or "")
+    self.EditBox:HighlightText()
+    self.EditBox:SetFocus()
+  end,
+  OnHide                  = function(self) self.EditBox:SetText("") end,
+  EditBoxOnEscapePressed  = function(self) self:GetParent():Hide() end,
+  timeout      = 0,
+  whileDead    = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
+
+-- Accepts a pasted import string; parses and applies (with confirm if conflicts).
+StaticPopupDialogs["GEARINVENTORY_IMPORT"] = {
+  text     = L["IMPORT_HINT"],
+  button1  = ACCEPT,
+  button2  = CANCEL,
+  hasEditBox   = true,
+  editBoxWidth = 360,
+  OnAccept = function(self)
+    local str = self.EditBox:GetText()
+    local importType, data, conflicts, err = GI.ParseImport(str)
+    if err then
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_INVALID"])
+      return
+    end
+    if #conflicts > 0 then
+      local d = { importType = importType, importData = data }
+      C_Timer.After(0, function()
+        local popup = StaticPopup_Show("GEARINVENTORY_IMPORT_CONFIRM", #conflicts)
+        if popup then popup.data = d end
+      end)
+    else
+      local count, skipped, charKey = GI.ApplyImport(importType, data)
+      if importType == "char" then
+        if skipped > 0 then
+          print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_SKIP_CURRENT"])
+        else
+          print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
+        end
+      else
+        print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL"], count, skipped))
+      end
+    end
+  end,
+  OnHide                  = function(self) self.EditBox:SetText("") end,
+  EditBoxOnEscapePressed  = function(self) self:GetParent():Hide() end,
+  timeout      = 0,
+  whileDead    = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
+
+-- Confirms overwrite when imported data collides with existing characters.
+-- YES = overwrite existing; NO = import only new characters (skip existing).
+local function ApplyImportAndPrint(importType, importData, skipExisting)
+  local count, overwritten, skipped, charKey, writtenKeys = GI.ApplyImport(importType, importData, skipExisting)
+  if importType == "char" then
+    if count == 0 and overwritten == 0 then
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_SKIP_CURRENT"])
+    else
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
+    end
+  else
+    if overwritten > 0 then
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL_OW"], count, overwritten, skipped))
+    else
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL"], count, skipped))
+    end
+  end
+  if writtenKeys and #writtenKeys > 0 and GI.WarmUpAllCharacters then
+    GI.WarmUpAllCharacters()
+  end
+end
+
+StaticPopupDialogs["GEARINVENTORY_IMPORT_CONFIRM"] = {
+  text     = L["IMPORT_OVERWRITE"],
+  button1  = YES,
+  button2  = NO,
+  OnAccept = function(self)
+    if not self.data then return end
+    ApplyImportAndPrint(self.data.importType, self.data.importData, false)
+  end,
+  OnCancel = function(self)
+    if not self.data then return end
+    ApplyImportAndPrint(self.data.importType, self.data.importData, true)
+  end,
+  timeout      = 0,
+  whileDead    = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}

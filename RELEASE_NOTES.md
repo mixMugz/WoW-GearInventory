@@ -2,12 +2,95 @@
 
 ---
 
+## v12.0.1 `#0004`
+
+### DB Structure Rework
+
+- Gear slots now stored as `gear[specID].slots["s"..slotID]` — string keys prevent WoW serializer from collapsing the table into an ordered array, eliminating slot ID corruption
+- `avgIlvl`, `avgIlvlColor`, `lastUpdate` moved from `character` block into `gear[specID]` — values are now per-spec accurate (avg item level reflects the spec's own gear)
+- Removed fallback `gear[0]` bucket — no longer needed
+- DB reset to `v1`; old SavedVariables must be cleared manually
+
+### Main Window — Title Bar
+
+- **Character jump button** — race portrait with class-coloured ring in the left corner of the title bar; click to instantly select the current character and scroll the list to their row; ring turns gold on hover; icon shifts and darkens on press
+
+### Main Window — General
+
+- Closes automatically on combat enter; cannot be opened while in combat
+- On open, character list automatically scrolls to the selected character (current player)
+
+### Main Window — Character List
+
+- **Level badge** — level number displayed on a badge over the race portrait (bottom-left corner); font size auto-fits to badge bounds at any UI scale
+- **Collapsible group headers** — character list can be grouped by Realm, Faction, or Armor Type; groups expand/collapse on click; header shows group name and character count
+- **Sort by Level** added to sort options
+- **Secondary Sort** — independent secondary sort criterion applied when primary produces equal results
+- **Sort Direction** — global Ascending / Descending toggle in the Sort submenu; default Descending; applies to all sort fields
+- Sort, direction, and group state persisted in config
+
+### Settings — General Options
+
+- Sort By, Secondary Sort, Sort Direction, and Group By available as dropdowns
+- Secondary Sort automatically resets when it matches the newly selected Primary Sort
+- Group By options: None, Realm, Faction, Armor Type
+- Sort By options: Name, Class, Level, Item Level; Secondary adds None and Last Updated
+
+### Settings — Saved Characters Panel
+
+- Column RECOMMENDATIONS now dynamically sized using real header text width (`GetStringWidth`) instead of hardcoded constant — column shrinks correctly for 1–2 saved specs
+- LASTUPDATE column width measured dynamically from actual content at panel open time; `GameFontNormalSmall` used for compact display
+- Word wrap disabled for character name and last update columns — text clips instead of wrapping
+- Spec checkboxes scaled to 0.75 (visually ~15px to match race/spec icon size)
+- Spec slot group centered within RECOMMENDATIONS column based on actual spec count
+- Row height set to 22px
+- Left indent increased by 10px for characters list and name column header
+- Delete button size reduced to 16px
+
+### Settings — Structure
+
+- `Options/panel.lua` split into `Options/general.lua` (sort/group/minimap/items) and `Options/main.lua` (about page, registration)
+- `Options/config.lua` merged into `Addons/core.lua` — config defaults and `GI.Config.Get/Set` now loaded earlier in the stack
+
+### Minimap Tooltip
+
+- Tooltip width reduced — `AddDoubleLine` replaced with `AddLine` entries; no forced two-column layout
+- Version removed from tooltip
+- Version removed from main window title bar
+
+### Code Quality
+
+- `CharList_GroupHeader` and `CharList_CharButton` extracted from `CreateMainWindow` into named file-level functions
+- `GetAvgIlvl`, `GetLastUpdated`, `CompareBy`, `GetGroupKey` moved to file level — no longer re-created on every `RefreshCharacterList` call
+- `PROGRESS_COLORS` and `UPGRADE_STAR_COUNT` promoted to file-level constants
+- Eliminated duplicate `QColor` call and dead `qHex` variable in `ShowCharacterGear`
+
+### Export / Import
+
+- **Export All Characters** — settings dropdown → encodes full DB into a copyable string (`GI:v1:FULL:...`)
+- **Export Character** — right-click a character row → "Export Character" (`GI:v1:CHAR:...`)
+- **Import** — settings dropdown; auto-detects full or single-character import; overwrites with confirmation; current player always skipped
+- Encoding: CBOR → Deflate (OptimizeForSize) → Base64 via `C_EncodingUtil`; no external libraries
+
+### Bug Fixes
+
+- Fixed sort comparator using Lua `and/or` ternary — inconsistent result when ascending caused `table.sort` to pass `nil` as second argument and crash
+- Fixed `DeleteSpec` fallback: when active spec is deleted, `character.specID` now switches to the spec with the most recent `lastUpdate` (previously used lowest specID)
+- Fixed picker background clicks closing the picker window unintentionally
+- Fixed `StaticPopupDialogs` for delete moved to `characters.lua`; `GI.ConfirmDeleteCharacter` moved to `main.lua`
+- Fixed spec and character name coloring in delete confirmation dialogs and chat print — now uses class color
+- ~~Fixed character tooltip `Spec:` line rendering in small font after minimap tooltip was shown — caused by `GameTooltip` FontString font size not being reset between tooltip uses~~
+- Fixed class sort treating gendered class name variants as different values — now sorts on internal class token
+- Fixed level badge rendering behind race portrait border — z-order corrected via `SetFrameLevel`
+
+---
+
 ## v12.0.1 `#0003`
 
 ### New Features
 
 - **Per-spec recommendations** — `incRecommend` stored per `gear[specID]` bucket; enable/disable recommendations independently for each spec
-- **Saved Specs in tooltip** — character tooltip shows spec icons for saved specializations (only when 2+ specs are stored)
+- ~~**Saved Specs in tooltip** — character tooltip shows spec icons for saved specializations (only when 2+ specs are stored)~~
 - **F.A.Q.** subcategory — new section added to settings (placeholder for now)
 
 ### Settings Panel Rework
@@ -45,15 +128,15 @@
 - Fixed `nil` in gear DB for empty offhand slot (2H weapon)
 - Fixed General Options panel being empty on first open
 - Fixed typo `incRecomend` → `incRecommend`
-- Fixed `MigrateV2` was called but never defined
+- ~~Fixed `MigrateV2` was called but never defined~~
 - Fixed `GetNativeWidth` error on logo texture (WoW 12.0 API)
 - Fixed `GameTooltipStatusBar` strip appearing under minimap tooltip
 
 ### DB
 
-- Version **v4**
-- `MigrateV3`: moves `incRecommend` from `character` block into each `gear[specID]` bucket
-- `MigrateV2`: removes deprecated `db.version` field
+- ~~Version **v4**~~
+- ~~`MigrateV3`: moves `incRecommend` from `character` block into each `gear[specID]` bucket~~
+- ~~`MigrateV2`: removes deprecated `db.version` field~~
 
 ---
 
@@ -71,7 +154,7 @@
 ### Changes
 
 - Gear scan now supports multiple specializations per character (`gear[specID]`)
-- DB restructured: flat layout → `character` + `gear` blocks (`MigrateV1`)
+- ~~DB restructured: flat layout → `character` + `gear` blocks (`MigrateV1`)~~
 
 ### Bug Fixes
 

@@ -4,7 +4,7 @@
 ## Author: mixMugz (a.k.a. Муади-Ревущийфьорд)
 ## IconTexture: Interface\AddOns\GearInventory\Textures\gi_icon
 ## Category: Bags & Inventory
-## Version: |cFF888888 12.0.1#0003|r
+## Version: |cFF888888 12.0.1#0004|r
 ## SavedVariables: GearInventoryDB
 
 ## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, Bazooka, SexyMap
@@ -12,14 +12,19 @@
 ## X-NOTE: Verify Interface version via: /dump select(4, GetBuildInfo())
 ## X-NOTE: This folder must be named "GearInventory" in Interface/AddOns/
 
+Libs/embeds.xml
+
 Addons/core.lua
 Locales/enUS.lua
-Options/config.lua
 Addons/db.lua
 Addons/main.lua
+Addons/exportimport.lua
 Addons/libs.lua
-Addons/ui-templates.xml
+Addons/ui.xml
 Addons/ui.lua
 Addons/broker.lua
 Addons/minimap.lua
-Options/panel.lua
+Options/general.lua
+Options/characters.lua
+Options/faq.lua
+Options/main.lua
