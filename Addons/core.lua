@@ -7,7 +7,7 @@ local addonName, GI = ...
 GI.L = setmetatable({}, { __index = function(_, k) return k end })
 
 -- ─── Version ───────────────────────────────────────────────/───────────────────
-GI.VERSION = "12.0.1#0004"
+GI.VERSION = "12.1.0#0005"
 GI.AUTHOR  = "mixMugz (a.k.a. Муади-Ревущийфьорд)"
 
 -- ─── Equipment Slots ──────────────────────────────────────────────────────────
@@ -272,17 +272,20 @@ GI.SPEC_INFO = {
   },
 }
 
--- ─── Upgrade Tracks (Midnight Season 1) ──────────────────────────────────────
+-- ─── Upgrade Tracks (Midnight Season 2) ──────────────────────────────────────
 -- BonusID → { track (EN), rank (1=lowest), cur, max }
 -- Parsed from itemLink bonusIDs; independent of client locale.
+-- Current season only — gear from past seasons resolves to no track by design.
+-- When the season changes, replace the start bonusIDs below.
+-- Verified in game: Adventurer 12817, Veteran 12825.
 GI.UPGRADE_TRACKS = {}
 do
   local tracks = {
-    { name = "Adventurer", rank = 1, start = 12769, max = 6 },
-    { name = "Veteran",    rank = 2, start = 12777, max = 6 },
-    { name = "Champion",   rank = 3, start = 12785, max = 6 },
-    { name = "Hero",       rank = 4, start = 12793, max = 6 },
-    { name = "Myth",       rank = 5, start = 12801, max = 6 },
+    { name = "Adventurer", rank = 1, start = 12817, max = 6 },
+    { name = "Veteran",    rank = 2, start = 12825, max = 6 },
+    { name = "Champion",   rank = 3, start = 12833, max = 6 },
+    { name = "Hero",       rank = 4, start = 12841, max = 6 },
+    { name = "Myth",       rank = 5, start = 12849, max = 6 },
   }
   for _, t in ipairs(tracks) do
     for i = 1, t.max do

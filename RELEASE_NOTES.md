@@ -2,6 +2,17 @@
 
 ---
 
+## v12.1.0 `#0005`
+
+### Season Update
+
+- Version bumped for the new season (patch 12.1.0)
+- TOC interface version updated to `120100`; legacy `120000`/`120001` dropped
+- **Upgrade tracks updated to Season 2** — Adventurer `12817`, Veteran `12825`, Champion `12833`, Hero `12841`, Myth `12849`, 6 ranks each
+- Season 1 bonusIDs removed; only the current season is tracked, past-season gear no longer resolves to a track
+
+---
+
 ## v12.0.1 `#0004`
 
 ### DB Structure Rework
