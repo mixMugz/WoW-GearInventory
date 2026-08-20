@@ -61,6 +61,7 @@
 
 ### Bug Fixes
 
+- Item-cache queue keys now include the character. Two saved characters holding the same item in the same slot shared one key, so `WarmUpAllCharacters` skipped the second and left its row on the `Loading...` placeholder until that character was logged into. The cache warm-up itself was never affected — `RequestLoadItemDataByID` fills a client-wide cache
 - Fixed "Delete all characters" leaving the right panel showing a deleted alt's gear. `GI.ClearMainWindowSelection` was called without an argument and its guard compared that nil against the selection, so it returned immediately. The argument is now optional, and after the wipe the current character — the only one the rescan re-adds — is selected explicitly
 - Fixed a queued scan being thrown away on death. Changing gear in combat defers the scan, but `PLAYER_DEAD` cleared the queue outright, so dying before combat ended dropped it with nothing left to retry — resurrecting fired no scan either. The queue now survives, and `PLAYER_UNGHOST` / `PLAYER_ALIVE` retry it alongside `PLAYER_REGEN_ENABLED`
 - Gear pruning is now skipped when the specialization API returns nothing to compare against. Previously an empty list was treated as "this character has no specs" and every saved gear bucket for them was deleted

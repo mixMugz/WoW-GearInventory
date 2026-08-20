@@ -151,9 +151,16 @@ end
 -- C_Item.GetItemInfo returns nil for items absent from the client cache.
 -- Such items are queued here and resolved via ITEM_DATA_LOAD_RESULT.
 
-local pendingItems    = {} -- { ["itemID:slotID"] = { charKey, slotID, itemID } }
+local pendingItems    = {} -- { [PendingKey()] = { charKey, slotID, itemID, specID } }
 local pendingScan     = false  -- true when a scan was requested during combat/death
 local pendingLoginScan = false -- true after PLAYER_LOGIN, cleared by PLAYER_ENTERING_WORLD
+
+-- Queue key. The character has to be part of it: two saved characters can hold
+-- the same item in the same slot, and a shared key would let the first one claim
+-- the entry and leave the second stuck on its placeholder name.
+local function PendingKey(charKey, itemID, slotID)
+  return charKey .. ":" .. itemID .. ":" .. slotID
+end
 
 local function HasPending()
   return next(pendingItems) ~= nil
@@ -348,7 +355,7 @@ local function ScanCharacterGear(isLoginScan)
           cached  = true,
         }
         if isLoginScan then
-          local pkey = itemID .. ":" .. slot.id
+          local pkey = PendingKey(key, itemID, slot.id)
           pendingItems[pkey] = { charKey = key, slotID = slot.id, itemID = itemID, specID = specIDKey }
           C_Item.RequestLoadItemDataByID(itemID)
         end
@@ -363,7 +370,7 @@ local function ScanCharacterGear(isLoginScan)
           icon    = C_Item.GetItemIconByID(itemID),
           cached  = false,
         }
-        local pkey = itemID .. ":" .. slot.id
+        local pkey = PendingKey(key, itemID, slot.id)
         pendingItems[pkey] = { charKey = key, slotID = slot.id, itemID = itemID, specID = specIDKey }
         C_Item.RequestLoadItemDataByID(itemID)
       end
@@ -424,7 +431,7 @@ function GI.WarmUpAllCharacters()
             local itemID = slot.id
             if itemID then
               local slotID = tonumber(skey:sub(2))
-              local pkey   = itemID .. ":" .. slotID
+              local pkey   = PendingKey(charKey, itemID, slotID)
               if not pendingItems[pkey] then
                 pendingItems[pkey] = { charKey = charKey, slotID = slotID, itemID = itemID, specID = specID }
                 C_Item.RequestLoadItemDataByID(itemID)
