@@ -699,26 +699,23 @@ SLASH_GEARINVENTORY1 = "/gi"
 SLASH_GEARINVENTORY2 = "/gearinventory"
 SlashCmdList["GEARINVENTORY"] = function(msg)
   local cmd = msg and msg:lower():match("^%s*(.-)%s*$") or ""
-  if cmd == "minimap" then
-    GI.ToggleMinimapButton()  -- Addons/minimap.lua
-  elseif cmd == "options" or cmd == "config" then
-    GI.OpenOptions()          -- Options/panel.lua
+  if cmd == "info" then
+    GI.OpenOptions()        -- Options/main.lua
   else
-    GI.ToggleMainWindow()     -- Addons/ui.lua
+    GI.ToggleMainWindow()   -- Addons/ui.lua
   end
 end
 
 local _L = GI.L
 C_Timer.After(0.5, function()
-  GI.PrintRaw("|cFFFFFFFF---------|r")
   local _ver = GI.VERSION or ""
   local _base, _build = _ver:match("^(.-)#(.+)$")
   local _verStr = _base and _build
     and ("|cFFAAAAAA" .. _base .. "|r|cFF888888#" .. _build .. "|r")
     or  ("|cFFAAAAAA" .. _ver .. "|r")
   GI.PrintRaw("|cFF00C9FFGear|r|cFFFFFFFFInventory|r " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
-  GI.PrintRaw("    " .. string.format(_L["CMD_TOGGLE"],  _L["ACT_TOGGLE_WINDOW"]))
-  GI.PrintRaw("    " .. string.format(_L["CMD_OPTIONS"], _L["ACT_OPEN_SETTINGS"]))
-  GI.PrintRaw("    " .. string.format(_L["CMD_MINIMAP"], _L["ACT_TOGGLE_MINIMAP"]))
+  GI.PrintRaw("|cFFFFFFFF---------|r")
+  GI.PrintRaw("  " .. string.format(_L["CMD_TOGGLE"], _L["ACT_TOGGLE_WINDOW"]))
+  GI.PrintRaw("  " .. string.format(_L["CMD_INFO"],   _L["ACT_OPEN_INFO"]))
   GI.PrintRaw("|cFFFFFFFF---------|r")
 end)

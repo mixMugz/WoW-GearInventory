@@ -10,11 +10,9 @@ local L = GI.L
 
 L["LOADED_MSG"]          = "loaded."
 L["CMD_TOGGLE"]          = "|cFF00FF00/gi|r |cFFFFFFFF-|r |cFFFFD100%s|r"
-L["CMD_OPTIONS"]         = "|cFF00FF00/gi options|r |cFFFFFFFF-|r |cFFFFD100%s|r"
-L["CMD_MINIMAP"]         = "|cFF00FF00/gi minimap|r |cFFFFFFFF-|r |cFFFFD100%s|r"
+L["CMD_INFO"]            = "|cFF00FF00/gi info|r |cFFFFFFFF-|r |cFFFFD100%s|r"
 L["ACT_TOGGLE_WINDOW"]   = "Toggle main window"
-L["ACT_OPEN_SETTINGS"]   = "Open settings"
-L["ACT_TOGGLE_MINIMAP"]  = "Toggle minimap icon"
+L["ACT_OPEN_INFO"]       = "Open the info panel"
 
 -- ─── Item States ──────────────────────────────────────────────────────────────
 

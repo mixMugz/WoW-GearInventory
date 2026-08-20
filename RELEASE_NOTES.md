@@ -38,6 +38,13 @@
 - Replaced the deprecated `GetSpecialization` / `GetSpecializationInfo` globals with `C_SpecializationInfo.*`. Both were compatibility shims loaded only while the `loadDeprecationFallbacks` CVar is set, and Blizzard has them slated for removal — the addon would have broken outright without them
 - Upgrade track parsing now reads exactly `numBonusIDs` entries from the item link instead of everything up to the end of the string. Trailing modifier values were being scanned as if they were bonusIDs and could have matched an upgrade track range by coincidence
 
+### Slash Commands
+
+- Login banner reworked: the version line now leads, followed by the command list between separators
+- **`/gi minimap` removed** — the minimap button is toggled from the settings dropdown checkbox. The toggle message no longer advertises the command either
+- **`/gi options` replaced by `/gi info`**, matching what the panel now holds. The old `options` and `config` spellings are gone
+- Dropped locale keys `CMD_MINIMAP` and `ACT_TOGGLE_MINIMAP`
+
 ### Chat Messages
 
 - **All addon chat output now goes through one gate** (`GI.Print` / `GI.PrintRaw`), replacing 20 scattered `print()` calls that each repeated the addon prefix by hand

@@ -46,7 +46,7 @@ local function ShowMMTooltip(anchor)
   GameTooltip:AddLine("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
   GameTooltip:AddLine(" ")
   GameTooltip:AddLine("|cFFFFFFFF" .. L["TIP_CLICK"] .. "|r " .. L["ACT_TOGGLE_WINDOW"], 1, 0.82, 0)
-  GameTooltip:AddLine("|cFFFFFFFF" .. L["TIP_RIGHT_CLICK"] .. "|r " .. L["ACT_OPEN_SETTINGS"], 1, 0.82, 0)
+  GameTooltip:AddLine("|cFFFFFFFF" .. L["TIP_RIGHT_CLICK"] .. "|r " .. L["ACT_OPEN_INFO"], 1, 0.82, 0)
   GameTooltip:Show()
 end
 
@@ -175,7 +175,7 @@ local function SetupManual()
 end
 
 -- ─── Public: Toggle Minimap Button ───────────────────────────────────────────
--- Called via /gi minimap (slash handler in GearInventory.lua).
+-- Called from the settings dropdown checkbox in Addons/ui.lua.
 
 function GI.ToggleMinimapButton()
   if not GI.db or not GI.db.config or not GI.db.config.minimapButton then return end
@@ -191,10 +191,8 @@ function GI.ToggleMinimapButton()
     else              GI.minimapButton:Show() end
   end
 
-  GI.Print(
-    L["MINIMAP_BUTTON"] .. " "
-    .. (nowHidden and L["MINIMAP_HIDDEN"] or L["MINIMAP_SHOWN"]) .. "."
-    .. "  |cFFAAAAAA(/gi minimap)|r")
+  GI.Print(L["MINIMAP_BUTTON"] .. " "
+    .. (nowHidden and L["MINIMAP_HIDDEN"] or L["MINIMAP_SHOWN"]) .. ".")
 end
 
 -- ─── Initialization ───────────────────────────────────────────────────────────
