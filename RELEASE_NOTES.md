@@ -38,6 +38,13 @@
 - Replaced the deprecated `GetSpecialization` / `GetSpecializationInfo` globals with `C_SpecializationInfo.*`. Both were compatibility shims loaded only while the `loadDeprecationFallbacks` CVar is set, and Blizzard has them slated for removal — the addon would have broken outright without them
 - Upgrade track parsing now reads exactly `numBonusIDs` entries from the item link instead of everything up to the end of the string. Trailing modifier values were being scanned as if they were bonusIDs and could have matched an upgrade track range by coincidence
 
+### Broker (LDB)
+
+- **Stripped back to a plain launcher**: icon, addon name and a tooltip. The plate used to show the current character's item level, which had been broken since #0004 anyway — it read `d.avgIlvl`, a field that moved into `gear[specID]` back then, so it always rendered as `?`
+- Removed `CurrentCharIlvl`, the `GI.OnCharacterDataUpdated` wrapper and the login sync timer that existed only to feed that number. `broker.lua` is 32 lines now
+- Tooltip is identical to the minimap button tooltip, built by a shared `GI.BuildLauncherTooltip` so the two cannot drift apart. The character list that briefly lived here is gone — the main window is where that belongs
+- Left click / right click hints name what they do. They previously showed a bare `Left click:` with nothing after it
+
 ### Slash Commands
 
 - Login banner reworked: the version line now leads, followed by the command list between separators

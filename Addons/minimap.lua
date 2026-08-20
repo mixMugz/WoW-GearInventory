@@ -1,12 +1,12 @@
--- GearInventory/Addons/Minimap.lua
+-- GearInventory/Addons/minimap.lua
 -- Minimap button with two setup paths:
 --   A) LibDBIcon-1.0 (bundled by SexyMap) — fully managed: positioning, styling,
 --      saved angle, show/hide state all handled by the library.
 --   B) Manual fallback — draggable button created directly on Minimap frame,
 --      angle persisted in GearInventoryDB.config.minimapButton.angle.
 --
--- Depends on: GI.dbicon (Addons/Libs.lua), GI.brokerObj (Addons/Broker.lua, may be nil),
---             GI.BuildCharacterTooltip (GearInventory.lua), GI.ToggleMainWindow (Addons/UI.lua)
+-- Depends on: GI.dbicon (Addons/libs.lua), GI.brokerObj (Addons/broker.lua, may be nil),
+--             GI.ToggleMainWindow (Addons/ui.lua)
 
 local addonName, GI = ...
 local L = GI.L
@@ -33,20 +33,14 @@ local MINIMAP_SHAPES = {
   ["TRICORNER-BOTTOMRIGHT"] = { true,  true,  true,  false },
 }
 
--- ─── Custom Tooltip ───────────────────────────────────────────────────────────
-
-local mmTip  -- lazy-created on first hover
-local mmTipRows = {}
+-- ─── Tooltip ──────────────────────────────────────────────────────────────────
 
 local function ShowMMTooltip(anchor)
   GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
   GameTooltip:ClearAllPoints()
   GameTooltip:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -2)
   GameTooltip:ClearLines()
-  GameTooltip:AddLine("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
-  GameTooltip:AddLine(" ")
-  GameTooltip:AddLine("|cFFFFFFFF" .. L["TIP_CLICK"] .. "|r " .. L["ACT_TOGGLE_WINDOW"], 1, 0.82, 0)
-  GameTooltip:AddLine("|cFFFFFFFF" .. L["TIP_RIGHT_CLICK"] .. "|r " .. L["ACT_OPEN_INFO"], 1, 0.82, 0)
+  GI.BuildLauncherTooltip(GameTooltip)
   GameTooltip:Show()
 end
 
@@ -59,7 +53,7 @@ end
 -- When present it handles button placement, shape masking, and hide/show state.
 
 local function SetupLibDBIcon()
-  -- brokerObj is set by Broker.lua; if LDB is absent there is no object to register
+  -- brokerObj is set by broker.lua; if LDB is absent there is no object to register
   if not GI.brokerObj then return false end
 
   GI.db.config.minimapButton = GI.db.config.minimapButton or { hide = false }
@@ -197,7 +191,7 @@ end
 
 -- ─── Initialization ───────────────────────────────────────────────────────────
 -- PLAYER_LOGIN fires after ADDON_LOADED, so GI.db is guaranteed to be set.
--- Broker.lua's brokerObj (if created) is also set by file-load time.
+-- broker.lua's brokerObj (if created) is also set by file-load time.
 
 local minimapFrame = CreateFrame("Frame")
 minimapFrame:RegisterEvent("PLAYER_LOGIN")

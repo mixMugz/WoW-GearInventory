@@ -133,62 +133,15 @@ function GI.PrintRaw(msg)
   print(msg)
 end
 
--- Fills a GameTooltip-compatible object with all saved characters (by avg ilvl).
--- Used by broker.lua (LDB OnTooltipShow) and minimap.lua (manual OnEnter).
-function GI.BuildCharacterTooltip(tip)
+-- Fills a GameTooltip-compatible object with the launcher tooltip: title plus
+-- the click hints. Shared by the minimap button and the LDB broker so the two
+-- cannot drift apart.
+function GI.BuildLauncherTooltip(tip)
   local L = GI.L
   tip:AddLine("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
-  if not GI.db then return end
-
-  local playerRealm = GetRealmName()
-  local sorted = {}
-  for key, data in pairs(GI.db.characters) do
-    table.insert(sorted, { key = key, data = data })
-  end
-  local function GetSpecBucket(data)
-    local ch = data.character or {}
-    return data.gear and ch.specID and data.gear[ch.specID]
-  end
-
-  table.sort(sorted, function(a, b)
-    local ab = GetSpecBucket(a.data)
-    local bb = GetSpecBucket(b.data)
-    return ((ab and ab.avgIlvl) or 0) > ((bb and bb.avgIlvl) or 0)
-  end)
-
-  if #sorted > 0 then
-    tip:AddLine(" ")
-    for _, entry in ipairs(sorted) do
-      local d      = entry.data
-      local ch     = d.character or {}
-      local bucket = GetSpecBucket(d)
-      local r, g, b = GI.ClassRGB(ch.class)
-      local icons = GI.RaceIconMarkup(ch.raceFile, ch.sex)
-                 .. GI.ClassIconMarkup(ch.class)
-      local displayName = ch.name or "?"
-      if ch.realm and ch.realm ~= playerRealm then
-        displayName = displayName .. "-" .. ch.realm
-      end
-      local nameColored = string.format(
-        "|cFF%02X%02X%02X%s|r",
-        r * 255, g * 255, b * 255, displayName)
-      local ready   = GI.IsIlvlReady(entry.key)
-      local avgIlvl = bucket and bucket.avgIlvl
-      local ilvlText
-      if avgIlvl ~= nil then
-        local marker = not ready and " |cFF666666~|r" or ""
-        ilvlText = string.format("|cFFFFD700" .. L["CHAR_AVG_ILVL"] .. "|r", avgIlvl) .. marker
-      elseif not ready then
-        ilvlText = "|cFF666666...|r"
-      else
-        ilvlText = ""
-      end
-      tip:AddDoubleLine(
-        icons .. nameColored,
-        ilvlText,
-        1, 1, 1, 1, 1, 1)
-    end
-  end
+  tip:AddLine(" ")
+  tip:AddLine("|cFFFFFFFF" .. L["TIP_CLICK"]       .. "|r " .. L["ACT_TOGGLE_WINDOW"], 1, 0.82, 0)
+  tip:AddLine("|cFFFFFFFF" .. L["TIP_RIGHT_CLICK"] .. "|r " .. L["ACT_OPEN_INFO"],     1, 0.82, 0)
 end
 
 -- ─── Database ─────────────────────────────────────────────────────────────────
