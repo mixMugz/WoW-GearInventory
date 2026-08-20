@@ -228,8 +228,10 @@ local function ScanCharacterGear(isLoginScan)
   local raceName, raceFile = UnitRace("player")
   local sex               = UnitSex("player")
   local faction, factionName = UnitFactionGroup("player")
-  local specIndex         = GetSpecialization()
-  local specID            = specIndex and select(1, GetSpecializationInfo(specIndex)) or nil
+  local specIndex         = C_SpecializationInfo.GetSpecialization()
+  local specID            = specIndex
+                            and select(1, C_SpecializationInfo.GetSpecializationInfo(specIndex))
+                            or nil
 
   local specIDKey = specID or 0
 
@@ -271,7 +273,7 @@ local function ScanCharacterGear(isLoginScan)
     local validSpecIDs = {}
     local numSpecs = GetNumSpecializations and GetNumSpecializations() or 0
     for i = 1, numSpecs do
-      local sid = select(1, GetSpecializationInfo(i))
+      local sid = select(1, C_SpecializationInfo.GetSpecializationInfo(i))
       if sid then validSpecIDs[sid] = true end
     end
     for sid in pairs(d.gear) do

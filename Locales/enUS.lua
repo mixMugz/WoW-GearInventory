@@ -33,7 +33,6 @@ L["TIME_DAY"]            = "%dd ago"
 
 L["CHAR_LEVEL"]          = "Level %d"
 L["CHAR_AVG_ILVL"]       = "Avg ilvl: %s"
-L["CHAR_LEVEL_SHORT"]    = "Lvl"
 
 -- ─── Character List Panel ─────────────────────────────────────────────────────
 
@@ -59,15 +58,8 @@ L["SLOT_TRINKET2"]       = "Trinket 2"
 L["SLOT_MAINHAND"]       = "Main Hand"
 L["SLOT_OFFHAND"]        = "Off Hand"
 
--- ─── Gear Table Column Headers ────────────────────────────────────────────────
+-- ─── Gear Scan ────────────────────────────────────────────────────────────────
 
-L["COL_SLOT"]            = "SLOT"
-L["COL_ITEM_NAME"]       = "ITEM NAME"
-L["COL_ILVL"]            = "ILVL"
-
--- ─── Scan Button ──────────────────────────────────────────────────────────────
-
-L["BTN_RESCAN"]          = "Rescan"
 L["SCAN_QUEUED"]         = "Scan queued — will run after combat ends"
 
 -- ─── Character Delete ───────────────────────────────────────────────────────

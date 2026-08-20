@@ -59,7 +59,7 @@ GI.CLASS_ARMOR = {
 }
 
 -- ─── Specialization Info ─────────────────────────────────────────────────────
--- Key = specID (from GetSpecializationInfo).  Values:
+-- Key = specID (from C_SpecializationInfo.GetSpecializationInfo).  Values:
 --   class – class token
 --   stat  – primary stat: "STR" | "AGI" | "INT"
 --   mh    – equippable mainhand weapon subtypes
@@ -299,13 +299,30 @@ do
   end
 end
 
+-- Item string layout:
+--   item:itemID:enchant:gem1:gem2:gem3:gem4:suffix:unique:linkLevel:specID:
+--        modifiersMask:itemContext:numBonusIDs:bonusID1:...:bonusIDn:numModifiers:...
+-- Eleven fields sit between itemID and numBonusIDs. The pattern matches on the
+-- "item:" substring rather than anchoring at the start of the link: the colour
+-- prefix (|cnIQ4:) contains a colon of its own and would shift every field by one.
+local ITEM_BONUS_PATTERN = "item:%d+" .. string.rep(":[^:]*", 11) .. ":(%d+):(.*)"
+
 -- Parses bonusIDs from an itemLink and returns upgrade track info.
+-- Only the first numBonusIDs entries are considered — everything past them is
+-- modifier data, whose values are unrelated to bonusIDs and could otherwise
+-- collide with an upgrade track range by coincidence.
 -- Returns: track, cur, max, rank  or nil
 function GI.ParseUpgradeTrack(itemLink)
   if not itemLink then return nil end
-  local bonusList = itemLink:match("item:%d+:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:%d+:([%d:]+)")
-  if not bonusList then return nil end
-  for idStr in bonusList:gmatch("(%d+)") do
+
+  local countStr, tail = itemLink:match(ITEM_BONUS_PATTERN)
+  local count = tonumber(countStr)
+  if not count or count < 1 or not tail then return nil end
+
+  local seen = 0
+  for idStr in tail:gmatch("(%d+)") do
+    seen = seen + 1
+    if seen > count then break end
     local info = GI.UPGRADE_TRACKS[tonumber(idStr)]
     if info then
       return info.track, info.cur, info.max, info.rank

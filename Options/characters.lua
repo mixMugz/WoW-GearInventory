@@ -665,8 +665,8 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_SPEC"] = {
     local myName    = UnitName("player")
     local myRealm   = GetRealmName()
     local myKey     = myName and myRealm and (myName .. "-" .. myRealm)
-    local specIndex = GetSpecialization()
-    local mySpecID  = specIndex and select(1, GetSpecializationInfo(specIndex))
+    local specIndex = C_SpecializationInfo.GetSpecialization()
+    local mySpecID  = specIndex and select(1, C_SpecializationInfo.GetSpecializationInfo(specIndex))
     if charKey == myKey and specID == mySpecID then
       GI.ScanCurrentCharacter()
     end

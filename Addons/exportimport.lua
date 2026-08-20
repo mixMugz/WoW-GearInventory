@@ -79,8 +79,6 @@ function GI.ParseImport(str)
   end
 
   -- Collect conflicts (charKeys already in DB, including current player)
-  local myKey = UnitName("player") and GetRealmName()
-    and (UnitName("player") .. "-" .. GetRealmName()) or nil
   local conflicts = {}
   if isChar then
     local k = decoded.key

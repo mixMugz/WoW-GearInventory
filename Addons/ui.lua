@@ -260,13 +260,7 @@ local function RenderItemTooltip(tooltip, link)
         rightFS:SetFont(font, 9, flags)
       end
     elseif ltype == Enum.TooltipDataLineType.SellPrice then
-      -- if line.price and line.price > 0 then
-      --   tooltip:AddLine(" ")
-      --   tooltip:AddLine(
-      --     (SELL_PRICE or "Sell Price") .. ":  " .. GetCoinTextureString(line.price),
-      --     1, 1, 1
-      --   )
-      -- end
+      -- Deliberately rendered as nothing: sell price is noise in a gear tooltip.
     elseif line.rightText and line.rightText ~= "" then
       local rc = line.rightColor
       tooltip:AddDoubleLine(

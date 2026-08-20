@@ -33,6 +33,11 @@
 - Sidebar order is now F.A.Q. → Saved Characters
 - Dropped locale keys `OPT_GENERAL`, `OPT_MINIMAP`, `OPT_ITEMS`, which existed only for that panel
 
+### API Modernisation
+
+- Replaced the deprecated `GetSpecialization` / `GetSpecializationInfo` globals with `C_SpecializationInfo.*`. Both were compatibility shims loaded only while the `loadDeprecationFallbacks` CVar is set, and Blizzard has them slated for removal — the addon would have broken outright without them
+- Upgrade track parsing now reads exactly `numBonusIDs` entries from the item link instead of everything up to the end of the string. Trailing modifier values were being scanned as if they were bonusIDs and could have matched an upgrade track range by coincidence
+
 ### Bug Fixes
 
 - Fixed item level of level-scaling gear (heirlooms) showing the unscaled value — item level is now read from the equipped instance via `C_Item.GetCurrentItemLevel` before falling back to the link
