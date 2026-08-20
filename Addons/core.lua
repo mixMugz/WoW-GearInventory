@@ -277,7 +277,24 @@ GI.SPEC_INFO = {
 -- Parsed from itemLink bonusIDs; independent of client locale.
 -- Current season only — gear from past seasons resolves to no track by design.
 -- When the season changes, replace the start bonusIDs below.
--- Verified in game: Adventurer 12817, Veteran 12825.
+-- Verified in game: Adventurer 12817 and Veteran 12825 at rank 1, and Veteran
+-- rank 2 as 12826 — so both axes are measured, not assumed: tracks are 8 apart
+-- and ranks step by +1. Champion, Hero and Myth follow the same 8-wide
+-- stride Blizzard has used every season.
+--
+-- How to capture the numbers for a new season: bind this to a key (clicking it
+-- with the mouse moves the pointer off the item and the tooltip closes), hover a
+-- real equipped or bagged item, and press it. It prints the bare item string and
+-- the tooltip's upgrade line, so the bonusID and the track line up.
+--
+--   /run local d=GameTooltip:GetPrimaryTooltipData() local _,h=TooltipUtil.GetDisplayedItem(GameTooltip) print(h:match("item[%d:%-]+")) for _,x in ipairs(d.lines) do if x.type==32 then print(x.leftText) end end
+--
+-- In the item string, the field right after itemContext is numBonusIDs; that many
+-- values follow, and one of them is the track. Line type 32 is
+-- Enum.TooltipDataLineType.ItemUpgradeLevel.
+--
+-- Adventure Guide links are useless for this: they carry a single placeholder
+-- bonusID and get their upgrade line from the difficulty, not from the item.
 GI.UPGRADE_TRACKS = {}
 do
   local tracks = {
