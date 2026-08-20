@@ -630,8 +630,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             end
           end
         end
-        pendingItems[pkey] = nil
       end
+
+      -- Clear the entry whichever way the lookup went. Nothing re-requests item
+      -- data for it, so a pending entry kept past this point would never resolve
+      -- and would hold ITEM_DATA_LOAD_RESULT registered for the whole session.
+      pendingItems[pkey] = nil
 
       if not HasPendingForChar(pending.charKey) then
         ilvlReady[pending.charKey] = true
