@@ -2,9 +2,11 @@
 -- About panel (top-level settings category) + category registration.
 -- Loaded last among Options files so all subcategory panels are already built.
 --
--- Depends on: GI.BuildGenPanel/GI.SyncGenPanel (Options/panel.lua),
---             GI.BuildCharPanel                (Options/characters.lua),
---             GI.BuildFAQPanel                 (Options/faq.lua)
+-- Depends on: GI.BuildFAQPanel  (Options/faq.lua),
+--             GI.BuildCharPanel (Options/characters.lua)
+--
+-- There is no general-settings panel: every option lives in the main window's
+-- title bar settings dropdown (Addons/ui.lua).
 
 local addonName, GI = ...
 local L = GI.L
@@ -60,24 +62,21 @@ regFrame:SetScript("OnEvent", function(self, event, arg1)
   -- ADDON_LOADED
   if arg1 ~= addonName then return end
 
-  local panel    = BuildPanel()
-  local genPanel = GI.BuildGenPanel()
+  local panel     = BuildPanel()
   local charPanel = GI.BuildCharPanel()
   local faqPanel  = GI.BuildFAQPanel()
 
   panel:SetScript("OnShow", function() SyncPanel(panel) end)
-  genPanel:SetScript("OnShow", GI.SyncGenPanel)
 
   local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
   Settings.RegisterAddOnCategory(category)
   GI.optionsCategory = category
 
-  Settings.RegisterCanvasLayoutSubcategory(category, genPanel,   genPanel.name)
-  Settings.RegisterCanvasLayoutSubcategory(category, charPanel,  charPanel.name)
+  -- Sidebar order follows registration order.
   Settings.RegisterCanvasLayoutSubcategory(category, faqPanel,   faqPanel.name)
+  Settings.RegisterCanvasLayoutSubcategory(category, charPanel,  charPanel.name)
 
   SyncPanel(panel)
-  GI.SyncGenPanel()
 
   self:UnregisterEvent("ADDON_LOADED")
 end)

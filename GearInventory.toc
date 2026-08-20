@@ -24,7 +24,6 @@ Addons/ui.xml
 Addons/ui.lua
 Addons/broker.lua
 Addons/minimap.lua
-Options/general.lua
 Options/characters.lua
 Options/faq.lua
 Options/main.lua

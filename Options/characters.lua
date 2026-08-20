@@ -124,7 +124,8 @@ end
 
 local function BuildCharPanel()
   charPanel = CreateFrame("Frame")
-  charPanel.name = L["OPT_CHARACTERS"]
+  -- Icon trails the label, matching the F.A.Q. subcategory.
+  charPanel.name = L["OPT_CHARACTERS"] .. " |A:" .. GI.ATLAS.OPT_CHARACTERS .. ":14:14|a"
 
   -- Initial column widths (no data yet — use MAX_SPECS_IN_ROW, zero content widths)
   local colSpecsW, colDeleteW, colLastUpdW = CalcColWidths(MAX_SPECS_IN_ROW, 0, 0, 0, 0)

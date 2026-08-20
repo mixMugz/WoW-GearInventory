@@ -352,6 +352,7 @@ GI.ATLAS = {
   WINDOW_BG        = "UI-Journeys-BG",
   FACTION_HORDE         = "UI-HUD-UnitFrame-Player-PVP-HordeIcon",
   FACTION_ALLIANCE      = "UI-HUD-UnitFrame-Player-PVP-AllianceIcon",
+  OPT_CHARACTERS        = "socialqueuing-icon-group",
 }
 
 -- ─── Default Configuration ────────────────────────────────────────────────────

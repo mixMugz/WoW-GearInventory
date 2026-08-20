@@ -25,6 +25,14 @@
 - Group-by option list extracted into a single shared builder used by both the settings dropdown and the group header context menu
 - `Sorting` renamed to `Sort characters by` to match `Group characters by`
 
+### Settings
+
+- **General Options subcategory removed** — every setting it held is available from the main window's title bar settings dropdown, which is where they were actually used from
+- `Options/general.lua` deleted; the addon no longer uses the legacy `UIDropDownMenu` system anywhere
+- Saved Characters subcategory now carries an icon, matching the F.A.Q. entry
+- Sidebar order is now F.A.Q. → Saved Characters
+- Dropped locale keys `OPT_GENERAL`, `OPT_MINIMAP`, `OPT_ITEMS`, which existed only for that panel
+
 ### Bug Fixes
 
 - Fixed item level of level-scaling gear (heirlooms) showing the unscaled value — item level is now read from the equipped instance via `C_Item.GetCurrentItemLevel` before falling back to the link
