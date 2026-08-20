@@ -110,6 +110,16 @@ function GI.SpecInfo(specID)
   return name, icon
 end
 
+-- "Name-Realm" key of the character being played, matching how entries are keyed
+-- in the DB. Returns nil when either half is unavailable, which the callers treat
+-- as "no current character" rather than guessing.
+function GI.PlayerKey()
+  local name  = UnitName("player")
+  local realm = GetRealmName()
+  if not name or not realm then return nil end
+  return name .. "-" .. realm
+end
+
 -- ─── Chat Output ──────────────────────────────────────────────────────────────
 -- Every addon message goes through here, so the "debug messages" setting can
 -- silence all of them from one place. Output stays on unless explicitly switched
@@ -619,8 +629,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             slot.cached  = true
             slot.expac   = expacID or slot.expac
             -- FetchAvgIlvl() returns the current player's value only — skip for other chars.
-            local myKey = UnitName("player") and GetRealmName()
-              and (UnitName("player") .. "-" .. GetRealmName()) or nil
+            local myKey = GI.PlayerKey()
             if pending.charKey == myKey then
               local fresh = FetchAvgIlvl()
               if fresh then

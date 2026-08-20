@@ -38,6 +38,16 @@
 - Replaced the deprecated `GetSpecialization` / `GetSpecializationInfo` globals with `C_SpecializationInfo.*`. Both were compatibility shims loaded only while the `loadDeprecationFallbacks` CVar is set, and Blizzard has them slated for removal — the addon would have broken outright without them
 - Upgrade track parsing now reads exactly `numBonusIDs` entries from the item link instead of everything up to the end of the string. Trailing modifier values were being scanned as if they were bonusIDs and could have matched an upgrade track range by coincidence
 
+### Import Validation
+
+- Import strings are now validated before anything reaches the database. A valid `GI:v1:` header only proves the string claims to be ours; the decoded payload is checked for shape, and a malformed one is rejected outright rather than written in
+- Character keys are checked for the `Name-Realm` form and rejected if they carry `|` escape sequences. Such a key used to be echoed into chat verbatim when the character was not in the database, where the sequences would be interpreted as markup
+- The header version is parsed instead of being compared as one fixed string, so a string from another version is reported as such instead of as plain garbage
+
+### Code Quality
+
+- `GI.PlayerKey()` replaces eight copies of `UnitName("player").."-"..GetRealmName()` across `ui.lua`, `Options/characters.lua`, `exportimport.lua` and `main.lua`
+
 ### Saved Characters Panel
 
 - **Character level** shown at the start of each row, right-aligned in a fixed zone so the numbers line up down the list, with the race and faction icons following it

@@ -740,9 +740,7 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_SPEC"] = {
     GI.DeleteSpec(charKey, specID)
 
     -- If this is the current character's active spec — rescan immediately
-    local myName    = UnitName("player")
-    local myRealm   = GetRealmName()
-    local myKey     = myName and myRealm and (myName .. "-" .. myRealm)
+    local myKey     = GI.PlayerKey()
     local specIndex = C_SpecializationInfo.GetSpecialization()
     local mySpecID  = specIndex and select(1, C_SpecializationInfo.GetSpecializationInfo(specIndex))
     if charKey == myKey and specID == mySpecID then
@@ -771,9 +769,7 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_CHAR"] = {
     local charKey     = type(self.data) == "table" and self.data.charKey or self.data
     local coloredName = type(self.data) == "table" and self.data.coloredName
     local raceMarkup  = (type(self.data) == "table" and self.data.raceMarkup) or ""
-    local myName  = UnitName("player")
-    local myRealm = GetRealmName()
-    local myKey   = myName and myRealm and (myName .. "-" .. myRealm)
+    local myKey   = GI.PlayerKey()
     local isCurrentChar = (charKey == myKey)
     local wasSelected = GI.IsMainWindowSelection and GI.IsMainWindowSelection(charKey)
     GI.DeleteCharacter(charKey)

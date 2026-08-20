@@ -807,7 +807,7 @@ local function CreateMainWindow()
 
   local function RefreshCharJumpBtn()
     if not GI.db then charJumpBtn:Hide() return end
-    local key = UnitName("player") .. "-" .. GetRealmName()
+    local key = GI.PlayerKey()
     local d   = GI.db.characters[key]
     local ch  = d and d.character
     if not ch then charJumpBtn:Hide() return end
@@ -840,7 +840,7 @@ local function CreateMainWindow()
   end)
 
   charJumpBtn:SetScript("OnClick", function()
-    local key = UnitName("player") .. "-" .. GetRealmName()
+    local key = GI.PlayerKey()
     if not (GI.db and GI.db.characters[key]) then return end
     PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
     GI.ShowCharacterGear(key)
@@ -1201,7 +1201,7 @@ function GI.ToggleMainWindow()
         return not data.isHeader and data.key == selectedKey
       end, ScrollBoxConstants.AlignBegin, 0, true)
     elseif GI.db then
-      local key = UnitName("player") .. "-" .. GetRealmName()
+      local key = GI.PlayerKey()
       if GI.db.characters[key] then
         GI.ShowCharacterGear(key)
         w.charScrollBox:ScrollToElementDataByPredicate(function(data)
@@ -1302,7 +1302,7 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_ALL"] = {
     GI.ClearMainWindowSelection()
     GI.DeleteAllCharacters()
     GI.RefreshCharacterList()
-    local key = UnitName("player") .. "-" .. GetRealmName()
+    local key = GI.PlayerKey()
     if GI.db and GI.db.characters[key] then
       GI.ShowCharacterGear(key)
     end
@@ -1344,7 +1344,13 @@ StaticPopupDialogs["GEARINVENTORY_IMPORT"] = {
     local str = self.EditBox:GetText()
     local importType, data, conflicts, err = GI.ParseImport(str)
     if err then
-      GI.Print(L["IMPORT_INVALID"])
+      -- Only the version mismatch is worth its own wording; everything else is
+      -- indistinguishable to the user, who just needs to know the string is bad.
+      if err == "version" then
+        GI.Print(L["IMPORT_ERR_VERSION"])
+      else
+        GI.Print(L["IMPORT_INVALID"])
+      end
       return
     end
     if #conflicts > 0 then
