@@ -17,7 +17,10 @@ local SPEC_SLOT_GAP    = 6
 local SPEC_ZONE_PAD    = 10
 local DEL_BTN_SIZE     = 16
 local DEL_ZONE_PAD     = 10
+local EXP_BTN_SIZE     = 16
+local EXP_ZONE_PAD     = 10
 local LASTUPD_ZONE_PAD = 18
+local LEVEL_ZONE_W     = 22  -- right-aligned level column at the row start, fits 3 digits
 
 local HEADER_PAD = 6  -- 3px each side
 
@@ -28,15 +31,18 @@ local function FormatTimestamp(ts)
   return date("%d.%m.%y %H:%M", ts)
 end
 
-local function CalcColWidths(maxSpecs, recHeaderW, delHeaderW, lastUpdHeaderW, lastUpdContentW)
+-- Column widths, right to left: DELETE, EXPORT, RECOMMENDATIONS, LASTUPDATE.
+-- Each is the wider of its content and its header text.
+local function CalcColWidths(maxSpecs, recHeaderW, delHeaderW, expHeaderW, lastUpdHeaderW, lastUpdContentW)
   local n = math.max(1, math.min(maxSpecs, MAX_SPECS_IN_ROW))
   local specsW = n * (SPEC_ICON_W + SPEC_ICON_CB_GAP + SPEC_CB_EFF)
                + (n - 1) * SPEC_SLOT_GAP
                + SPEC_ZONE_PAD
   local colSpecsW   = math.max(specsW,  (recHeaderW   or 0) + HEADER_PAD)
   local colDeleteW  = math.max(DEL_BTN_SIZE + DEL_ZONE_PAD, (delHeaderW or 0) + HEADER_PAD)
+  local colExportW  = math.max(EXP_BTN_SIZE + EXP_ZONE_PAD, (expHeaderW or 0) + HEADER_PAD)
   local colLastUpdW = math.max((lastUpdContentW or 0) + LASTUPD_ZONE_PAD, (lastUpdHeaderW or 0) + HEADER_PAD)
-  return colSpecsW, colDeleteW, colLastUpdW
+  return colSpecsW, colDeleteW, colExportW, colLastUpdW
 end
 
 -- ─── Refresh ──────────────────────────────────────────────────────────────────
@@ -65,6 +71,7 @@ local function RefreshCharPanel()
   -- Recompute column widths using real text sizes (fonts ready at OnShow time)
   local recHeaderW     = charPanel.hRec:GetStringWidth()
   local delHeaderW     = charPanel.hDel:GetStringWidth()
+  local expHeaderW     = charPanel.hExp:GetStringWidth()
   local lastUpdHeaderW = charPanel.hLastUpdate:GetStringWidth()
 
   -- Measure widest lastUpdate content string
@@ -82,32 +89,36 @@ local function RefreshCharPanel()
   end
   mFS:SetText("")
 
-  local colSpecsW, colDeleteW, colLastUpdW =
-    CalcColWidths(maxSpecs, recHeaderW, delHeaderW, lastUpdHeaderW, maxLastUpdW)
+  local colSpecsW, colDeleteW, colExportW, colLastUpdW =
+    CalcColWidths(maxSpecs, recHeaderW, delHeaderW, expHeaderW, lastUpdHeaderW, maxLastUpdW)
 
   charPanel.colSpecsW   = colSpecsW
   charPanel.colDeleteW  = colDeleteW
+  charPanel.colExportW  = colExportW
   charPanel.colLastUpdW = colLastUpdW
 
   local SF_RIGHT_OFS = -20
 
-  -- CHARACTERS header
+  -- Headers are anchored right to left, each offset by the columns to its right.
   charPanel.hCharacters:ClearAllPoints()
   charPanel.hCharacters:SetPoint("TOPLEFT", 24, -52)
   charPanel.hCharacters:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT",
-    SF_RIGHT_OFS - colDeleteW - colSpecsW - colLastUpdW - 4, -52)
+    SF_RIGHT_OFS - colDeleteW - colExportW - colSpecsW - colLastUpdW - 4, -52)
 
-  -- LASTUPDATE header
   charPanel.hLastUpdate:SetWidth(colLastUpdW)
   charPanel.hLastUpdate:ClearAllPoints()
-  charPanel.hLastUpdate:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW - colSpecsW, -52)
+  charPanel.hLastUpdate:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT",
+    SF_RIGHT_OFS - colDeleteW - colExportW - colSpecsW, -52)
 
-  -- RECOMMENDATIONS header
   charPanel.hRec:SetWidth(colSpecsW)
   charPanel.hRec:ClearAllPoints()
-  charPanel.hRec:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW, -52)
+  charPanel.hRec:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT",
+    SF_RIGHT_OFS - colDeleteW - colExportW, -52)
 
-  -- DELETE header
+  charPanel.hExp:SetWidth(colExportW)
+  charPanel.hExp:ClearAllPoints()
+  charPanel.hExp:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW, -52)
+
   charPanel.hDel:SetWidth(colDeleteW)
   charPanel.hDel:ClearAllPoints()
   charPanel.hDel:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS, -52)
@@ -128,14 +139,35 @@ local function BuildCharPanel()
   charPanel.name = L["OPT_CHARACTERS"] .. " |A:" .. GI.ATLAS.OPT_CHARACTERS .. ":14:14|a"
 
   -- Initial column widths (no data yet — use MAX_SPECS_IN_ROW, zero content widths)
-  local colSpecsW, colDeleteW, colLastUpdW = CalcColWidths(MAX_SPECS_IN_ROW, 0, 0, 0, 0)
+  local colSpecsW, colDeleteW, colExportW, colLastUpdW = CalcColWidths(MAX_SPECS_IN_ROW, 0, 0, 0, 0, 0)
   charPanel.colSpecsW   = colSpecsW
   charPanel.colDeleteW  = colDeleteW
+  charPanel.colExportW  = colExportW
   charPanel.colLastUpdW = colLastUpdW
 
   local title = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 20, -20)
   title:SetText(L["OPT_CHARACTERS"])
+
+  -- Panel-wide actions, aligned with the title. Both reuse the same entry points
+  -- as the main window settings dropdown, so behaviour and confirmations match.
+  local ACTION_BTN_W, ACTION_BTN_H = 90, 22
+
+  local delAllBtn = CreateFrame("Button", nil, charPanel, "UIPanelButtonTemplate")
+  delAllBtn:SetSize(ACTION_BTN_W, ACTION_BTN_H)
+  delAllBtn:SetText(L["BTN_DELETE_ALL"])
+  delAllBtn:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", -20, -18)
+  delAllBtn:SetScript("OnClick", function()
+    StaticPopup_Show("GEARINVENTORY_DELETE_ALL")
+  end)
+
+  local expAllBtn = CreateFrame("Button", nil, charPanel, "UIPanelButtonTemplate")
+  expAllBtn:SetSize(ACTION_BTN_W, ACTION_BTN_H)
+  expAllBtn:SetText(L["BTN_EXPORT_ALL"])
+  expAllBtn:SetPoint("TOPRIGHT", delAllBtn, "TOPLEFT", -6, 0)
+  expAllBtn:SetScript("OnClick", function()
+    GI.ShowExportAll()
+  end)
 
   local rule = charPanel:CreateTexture(nil, "ARTWORK")
   rule:SetHeight(1)
@@ -156,7 +188,7 @@ local function BuildCharPanel()
   local hCharacters = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
   hCharacters:SetText(L["PANEL_CHARACTERS"])
   hCharacters:SetJustifyH("LEFT")
-  hCharacters:SetPoint("TOPLEFT", 34, -52)
+  hCharacters:SetPoint("TOPLEFT", 24, -52)
   hCharacters:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT",
     SF_RIGHT_OFS - colDeleteW - colSpecsW - colLastUpdW - 4, -52)
   charPanel.hCharacters = hCharacters
@@ -172,8 +204,15 @@ local function BuildCharPanel()
   hRec:SetText(L["COL_RECOMMENDATIONS"])
   hRec:SetJustifyH("CENTER")
   hRec:SetWidth(colSpecsW)
-  hRec:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW, -52)
+  hRec:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW - colExportW, -52)
   charPanel.hRec = hRec
+
+  local hExp = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+  hExp:SetText(L["COL_EXPORT"])
+  hExp:SetJustifyH("CENTER")
+  hExp:SetWidth(colExportW)
+  hExp:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW, -52)
+  charPanel.hExp = hExp
 
   local hDel = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
   hDel:SetText(L["COL_DELETE"])
@@ -218,11 +257,28 @@ local function BuildCharPanel()
         sep2:SetColorTexture(0.3, 0.3, 0.4, 0.5)
         row.sep2 = sep2
 
-        -- sep3: RECOMMENDATIONS | DELETE
+        -- sep3: RECOMMENDATIONS | EXPORT
         local sep3 = row:CreateTexture(nil, "ARTWORK")
         sep3:SetWidth(1)
         sep3:SetColorTexture(0.3, 0.3, 0.4, 0.5)
         row.sep3 = sep3
+
+        -- sep4: EXPORT | DELETE
+        local sep4 = row:CreateTexture(nil, "ARTWORK")
+        sep4:SetWidth(1)
+        sep4:SetColorTexture(0.3, 0.3, 0.4, 0.5)
+        row.sep4 = sep4
+
+        -- Export button — position updated in data population
+        local expBtn = CreateFrame("Button", nil, row)
+        expBtn:SetSize(EXP_BTN_SIZE, EXP_BTN_SIZE)
+        expBtn:SetNormalAtlas("common-icon-exit")
+        expBtn:SetHighlightAtlas("common-icon-exit")
+        expBtn:GetHighlightTexture():SetVertexColor(0.4, 1, 0.4)
+        expBtn:SetScript("OnClick", function()
+          if row.charKey then GI.ShowExportCharacter(row.charKey) end
+        end)
+        row.expBtn = expBtn
 
         -- Delete button — position updated in data population
         local delBtn = CreateFrame("Button", nil, row)
@@ -263,10 +319,18 @@ local function BuildCharPanel()
           row.specSlots[i] = { icon = icon, frame = specFrame, cb = cb }
         end
 
+        -- Level, right-aligned in a fixed zone so the numbers line up down the list
+        local lvlFS = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        lvlFS:SetWidth(LEVEL_ZONE_W)
+        lvlFS:SetJustifyH("RIGHT")
+        lvlFS:SetTextColor(1, 1, 1)
+        lvlFS:SetPoint("LEFT", 4, 0)
+        row.lvlFS = lvlFS
+
         -- Race icon
         local raceFrame = CreateFrame("Frame", nil, row)
         raceFrame:SetSize(14, 14)
-        raceFrame:SetPoint("LEFT", 14, 0)
+        raceFrame:SetPoint("LEFT", lvlFS, "RIGHT", 5, 0)
         local raceIcon = raceFrame:CreateTexture(nil, "ARTWORK")
         raceIcon:SetAllPoints()
         raceIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -312,6 +376,7 @@ local function BuildCharPanel()
 
       local cSW  = charPanel.colSpecsW
       local cDW  = charPanel.colDeleteW
+      local cEW  = charPanel.colExportW
       local cLUW = charPanel.colLastUpdW
 
       -- Alternating row tint
@@ -325,16 +390,20 @@ local function BuildCharPanel()
 
       -- Separators
       row.sep1:ClearAllPoints()  -- CHARS | LASTUPDATE
-      row.sep1:SetPoint("TOP",    row, "TOPRIGHT",    -(cDW + cSW + cLUW), 0)
-      row.sep1:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -(cDW + cSW + cLUW), 0)
+      row.sep1:SetPoint("TOP",    row, "TOPRIGHT",    -(cDW + cEW + cSW + cLUW), 0)
+      row.sep1:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -(cDW + cEW + cSW + cLUW), 0)
 
       row.sep2:ClearAllPoints()  -- LASTUPDATE | RECOMMENDATIONS
-      row.sep2:SetPoint("TOP",    row, "TOPRIGHT",    -(cDW + cSW), 0)
-      row.sep2:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -(cDW + cSW), 0)
+      row.sep2:SetPoint("TOP",    row, "TOPRIGHT",    -(cDW + cEW + cSW), 0)
+      row.sep2:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -(cDW + cEW + cSW), 0)
 
-      row.sep3:ClearAllPoints()  -- RECOMMENDATIONS | DELETE
-      row.sep3:SetPoint("TOP",    row, "TOPRIGHT",    -cDW, 0)
-      row.sep3:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -cDW, 0)
+      row.sep3:ClearAllPoints()  -- RECOMMENDATIONS | EXPORT
+      row.sep3:SetPoint("TOP",    row, "TOPRIGHT",    -(cDW + cEW), 0)
+      row.sep3:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -(cDW + cEW), 0)
+
+      row.sep4:ClearAllPoints()  -- EXPORT | DELETE
+      row.sep4:SetPoint("TOP",    row, "TOPRIGHT",    -cDW, 0)
+      row.sep4:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -cDW, 0)
 
       -- CHARACTERS column
       local raceAtlas = GI.RaceAtlas(ch.raceFile, ch.sex)
@@ -352,7 +421,13 @@ local function BuildCharPanel()
 
       row.nameFS:ClearAllPoints()
       row.nameFS:SetPoint("LEFT",  row.factionTex, "RIGHT", 4, 0)
-      row.nameFS:SetPoint("RIGHT", row, "RIGHT", -(cDW + cSW + cLUW + 4), 0)
+      row.nameFS:SetPoint("RIGHT", row, "RIGHT", -(cDW + cEW + cSW + cLUW + 4), 0)
+      if ch.level and ch.level > 0 then
+        row.lvlFS:SetText(ch.level)
+      else
+        row.lvlFS:SetText("")
+      end
+
       local nameText = ch.name or "?"
       if ch.realm then nameText = nameText .. "-" .. ch.realm end
       row.nameFS:SetText(nameText)
@@ -360,8 +435,8 @@ local function BuildCharPanel()
 
       -- LASTUPDATE column
       row.lastUpdFS:ClearAllPoints()
-      row.lastUpdFS:SetPoint("LEFT",  row, "RIGHT", -(cDW + cSW + cLUW) + LASTUPD_ZONE_PAD / 2, 0)
-      row.lastUpdFS:SetPoint("RIGHT", row, "RIGHT", -(cDW + cSW + 4), 0)
+      row.lastUpdFS:SetPoint("LEFT",  row, "RIGHT", -(cDW + cEW + cSW + cLUW) + LASTUPD_ZONE_PAD / 2, 0)
+      row.lastUpdFS:SetPoint("RIGHT", row, "RIGHT", -(cDW + cEW + cSW + 4), 0)
       local activeSpecID = ch.specID
       local lastUpdate   = d.gear and activeSpecID
                            and d.gear[activeSpecID]
@@ -371,7 +446,10 @@ local function BuildCharPanel()
       -- RECOMMENDATIONS column
       -- (spec slot positions and visibility set below, after specs are collected)
 
-      -- DELETE column
+      -- EXPORT and DELETE columns
+      row.expBtn:ClearAllPoints()
+      row.expBtn:SetPoint("CENTER", row, "RIGHT", -(cDW + cEW / 2), 0)
+
       row.delBtn:ClearAllPoints()
       row.delBtn:SetPoint("CENTER", row, "RIGHT", -(cDW / 2), 0)
 
@@ -393,7 +471,7 @@ local function BuildCharPanel()
       -- Both frame and cb anchored directly to row (no sibling dependency).
       do
         local slotW   = SPEC_ICON_W + SPEC_ICON_CB_GAP + SPEC_CB_EFF  -- 31
-        local colLeft = -(cDW + cSW) + SPEC_ZONE_PAD / 2
+        local colLeft = -(cDW + cEW + cSW) + SPEC_ZONE_PAD / 2
         for i = 1, MAX_SPECS_IN_ROW do
           local slot      = row.specSlots[i]
           local j         = math.max(1, n - i + 1)

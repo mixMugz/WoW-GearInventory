@@ -38,6 +38,15 @@
 - Replaced the deprecated `GetSpecialization` / `GetSpecializationInfo` globals with `C_SpecializationInfo.*`. Both were compatibility shims loaded only while the `loadDeprecationFallbacks` CVar is set, and Blizzard has them slated for removal — the addon would have broken outright without them
 - Upgrade track parsing now reads exactly `numBonusIDs` entries from the item link instead of everything up to the end of the string. Trailing modifier values were being scanned as if they were bonusIDs and could have matched an upgrade track range by coincidence
 
+### Saved Characters Panel
+
+- **Character level** shown at the start of each row, right-aligned in a fixed zone so the numbers line up down the list, with the race and faction icons following it
+- **Export button per row**, alongside the delete button in its own column. One click exports that character and opens the copy dialog — there is no per-spec export, so it needs no picker
+- **Export all / Delete all buttons** in the panel header, on the title line. Both go through the same entry points as the main window settings dropdown, so the confirmations and messages are identical
+- Column order, right to left, is now DELETE, EXPORT, RECOMMENDATIONS, LASTUPDATE, CHARACTERS. Delete stays rightmost so the destructive action does not move
+- Export logic extracted into `GI.ShowExportCharacter` and `GI.ShowExportAll` in `ui.lua`, where the copy dialog lives, instead of being duplicated at each call site
+- Settings dropdown entries shortened to `Export all...` and `Delete all...`
+
 ### Broker (LDB)
 
 - **Stripped back to a plain launcher**: icon, addon name and a tooltip. The plate used to show the current character's item level, which had been broken since #0004 anyway — it read `d.avgIlvl`, a field that moved into `gear[specID]` back then, so it always rendered as `?`

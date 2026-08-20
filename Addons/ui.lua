@@ -523,16 +523,7 @@ local function CharList_CharButton(btn, nodeArg)
 
           -- Export character
           rootDescription:CreateButton(L["CTX_EXPORT_CHAR"], function()
-            local str, err = GI.ExportCharacter(key)
-            if not str then
-              GI.Print(L["EXPORT_ERR"])
-              return
-            end
-            local raceIcon    = GI.RaceIconMarkup(ch.raceFile, ch.sex)
-            local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
-            local coloredFull = raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
-            GI.Print(string.format(L["EXPORT_OK_CHAR"], coloredFull))
-            StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
+            GI.ShowExportCharacter(key)
           end)
 
           rootDescription:CreateSpacer()
@@ -769,15 +760,7 @@ local function CreateMainWindow()
       StaticPopup_Show("GEARINVENTORY_IMPORT")
     end)
 
-    rootDescription:CreateButton(L["EXPORT_ALL"], function()
-      local str, err = GI.ExportAll()
-      if not str then
-        GI.Print(L["EXPORT_ERR"])
-        return
-      end
-      GI.Print(L["EXPORT_OK_FULL"])
-      StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
-    end)
+    rootDescription:CreateButton(L["EXPORT_ALL"], GI.ShowExportAll)
 
     rootDescription:CreateSpacer()
 
@@ -1259,6 +1242,29 @@ local function CharImportMarkup(charKey)
   local raceIcon    = GI.RaceIconMarkup(ch.raceFile, ch.sex)
   local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
   return raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
+end
+
+-- Exports a single character and opens the copy dialog. Shared by the character
+-- row context menu and the Saved Characters panel, so the two cannot drift.
+function GI.ShowExportCharacter(charKey)
+  local str = GI.ExportCharacter(charKey)
+  if not str then
+    GI.Print(L["EXPORT_ERR"])
+    return
+  end
+  GI.Print(string.format(L["EXPORT_OK_CHAR"], CharImportMarkup(charKey)))
+  StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
+end
+
+-- Exports every saved character and opens the copy dialog.
+function GI.ShowExportAll()
+  local str = GI.ExportAll()
+  if not str then
+    GI.Print(L["EXPORT_ERR"])
+    return
+  end
+  GI.Print(L["EXPORT_OK_FULL"])
+  StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
 end
 
 -- Writes parsed import data and reports the outcome in chat.
