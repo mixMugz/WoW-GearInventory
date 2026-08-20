@@ -54,6 +54,7 @@
 
 ### Bug Fixes
 
+- Fixed "Delete all characters" leaving the right panel showing a deleted alt's gear. `GI.ClearMainWindowSelection` was called without an argument and its guard compared that nil against the selection, so it returned immediately. The argument is now optional, and after the wipe the current character — the only one the rescan re-adds — is selected explicitly
 - Fixed a queued scan being thrown away on death. Changing gear in combat defers the scan, but `PLAYER_DEAD` cleared the queue outright, so dying before combat ended dropped it with nothing left to retry — resurrecting fired no scan either. The queue now survives, and `PLAYER_UNGHOST` / `PLAYER_ALIVE` retry it alongside `PLAYER_REGEN_ENABLED`
 - Gear pruning is now skipped when the specialization API returns nothing to compare against. Previously an empty list was treated as "this character has no specs" and every saved gear bucket for them was deleted
 - Fixed the import result message on the no-conflict path reading `GI.ApplyImport`'s return values in the wrong order, so a successful single-character import printed a bare number instead of the character's name and a skipped one reported success. Both import paths now share one reporting function instead of duplicating it. That path also never triggered the item-cache warm-up for the newly imported data

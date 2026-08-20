@@ -1173,8 +1173,10 @@ function GI.IsMainWindowSelection(charKey)
   return selectedKey == charKey
 end
 
+-- charKey is optional: given one, the selection is cleared only when it points at
+-- that character; without one, it is cleared unconditionally.
 function GI.ClearMainWindowSelection(charKey)
-  if selectedKey ~= charKey then return end
+  if charKey and selectedKey ~= charKey then return end
   selectedKey = nil
   local w = GI.mainWindow
   if w then
@@ -1287,9 +1289,17 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_ALL"] = {
   button1       = YES,
   button2       = NO,
   OnAccept      = function()
-    GI.DeleteAllCharacters()
+    -- Order matters: DeleteAllCharacters rescans the current character at the
+    -- end, which re-adds them to a now-empty DB. Clear the old selection first,
+    -- then select whoever survived, so the panel never shows deleted gear and
+    -- never sits on the placeholder while a character is listed.
     GI.ClearMainWindowSelection()
+    GI.DeleteAllCharacters()
     GI.RefreshCharacterList()
+    local key = UnitName("player") .. "-" .. GetRealmName()
+    if GI.db and GI.db.characters[key] then
+      GI.ShowCharacterGear(key)
+    end
     if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
   end,
   timeout       = 0,
