@@ -1252,6 +1252,29 @@ local function CharImportMarkup(charKey)
   return raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
 end
 
+-- Writes parsed import data and reports the outcome in chat.
+-- Used by both import paths — the plain one and the overwrite confirmation — so
+-- that neither can drift in how it reads GI.ApplyImport's five return values.
+local function ApplyImportAndPrint(importType, importData, skipExisting)
+  local count, overwritten, skipped, charKey, writtenKeys = GI.ApplyImport(importType, importData, skipExisting)
+  if importType == "char" then
+    if count == 0 and overwritten == 0 then
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_SKIP_CURRENT"])
+    else
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
+    end
+  else
+    if overwritten > 0 then
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL_OW"], count, overwritten, skipped))
+    else
+      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL"], count, skipped))
+    end
+  end
+  if writtenKeys and #writtenKeys > 0 and GI.WarmUpAllCharacters then
+    GI.WarmUpAllCharacters()
+  end
+end
+
 StaticPopupDialogs["GEARINVENTORY_DELETE_ALL"] = {
   text          = L["DELETE_ALL_CONFIRM"],
   button1       = YES,
@@ -1308,16 +1331,7 @@ StaticPopupDialogs["GEARINVENTORY_IMPORT"] = {
         if popup then popup.data = d end
       end)
     else
-      local count, skipped, charKey = GI.ApplyImport(importType, data)
-      if importType == "char" then
-        if skipped > 0 then
-          print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_SKIP_CURRENT"])
-        else
-          print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
-        end
-      else
-        print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL"], count, skipped))
-      end
+      ApplyImportAndPrint(importType, data)
     end
   end,
   OnHide                  = function(self) self.EditBox:SetText("") end,
@@ -1330,26 +1344,6 @@ StaticPopupDialogs["GEARINVENTORY_IMPORT"] = {
 
 -- Confirms overwrite when imported data collides with existing characters.
 -- YES = overwrite existing; NO = import only new characters (skip existing).
-local function ApplyImportAndPrint(importType, importData, skipExisting)
-  local count, overwritten, skipped, charKey, writtenKeys = GI.ApplyImport(importType, importData, skipExisting)
-  if importType == "char" then
-    if count == 0 and overwritten == 0 then
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_SKIP_CURRENT"])
-    else
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
-    end
-  else
-    if overwritten > 0 then
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL_OW"], count, overwritten, skipped))
-    else
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL"], count, skipped))
-    end
-  end
-  if writtenKeys and #writtenKeys > 0 and GI.WarmUpAllCharacters then
-    GI.WarmUpAllCharacters()
-  end
-end
-
 StaticPopupDialogs["GEARINVENTORY_IMPORT_CONFIRM"] = {
   text     = L["IMPORT_OVERWRITE"],
   button1  = YES,

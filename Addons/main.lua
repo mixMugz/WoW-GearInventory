@@ -298,9 +298,14 @@ local function ScanCharacterGear(isLoginScan)
     -- active right now is valid by definition.
     if specID then validSpecIDs[specID] = true end
 
-    for sid in pairs(d.gear) do
-      if not validSpecIDs[sid] then
-        d.gear[sid] = nil
+    -- An empty list means the spec API told us nothing, not that the character
+    -- has no specs. Pruning against it would silently delete every saved bucket,
+    -- so leave the data untouched and let a later scan do the work.
+    if next(validSpecIDs) then
+      for sid in pairs(d.gear) do
+        if not validSpecIDs[sid] then
+          d.gear[sid] = nil
+        end
       end
     end
   end
