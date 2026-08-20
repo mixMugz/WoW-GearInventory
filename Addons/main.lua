@@ -504,7 +504,8 @@ eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")   -- left combat
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")  -- entered combat
-eventFrame:RegisterEvent("PLAYER_DEAD")
+eventFrame:RegisterEvent("PLAYER_UNGHOST")         -- revived at the corpse
+eventFrame:RegisterEvent("PLAYER_ALIVE")           -- resurrected without releasing
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
@@ -532,8 +533,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
   elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
     C_Timer.After(0.5, ScanCharacterGear)
 
-  elseif event == "PLAYER_REGEN_ENABLED" then
-    -- Left combat: run the queued scan if one was deferred.
+  elseif event == "PLAYER_REGEN_ENABLED"
+      or event == "PLAYER_UNGHOST"
+      or event == "PLAYER_ALIVE" then
+    -- One of the two conditions that defer a scan has lifted: combat ended, or
+    -- the player is no longer dead. ScanCharacterGear re-checks both itself and
+    -- simply re-queues if the other one still holds.
     if pendingScan then
       C_Timer.After(0.5, ScanCharacterGear)
     end
@@ -543,10 +548,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     if GI.mainWindow and GI.mainWindow:IsShown() then
       GI.mainWindow:Hide()
     end
-
-  elseif event == "PLAYER_DEAD" then
-    -- Cancel any queued scan; no point scanning a dead character.
-    pendingScan = false
 
   elseif event == "ITEM_DATA_LOAD_RESULT" then
     local itemID, success = arg1, arg2

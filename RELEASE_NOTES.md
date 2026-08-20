@@ -40,6 +40,7 @@
 
 ### Bug Fixes
 
+- Fixed a queued scan being thrown away on death. Changing gear in combat defers the scan, but `PLAYER_DEAD` cleared the queue outright, so dying before combat ended dropped it with nothing left to retry — resurrecting fired no scan either. The queue now survives, and `PLAYER_UNGHOST` / `PLAYER_ALIVE` retry it alongside `PLAYER_REGEN_ENABLED`
 - Gear pruning is now skipped when the specialization API returns nothing to compare against. Previously an empty list was treated as "this character has no specs" and every saved gear bucket for them was deleted
 - Fixed the import result message on the no-conflict path reading `GI.ApplyImport`'s return values in the wrong order, so a successful single-character import printed a bare number instead of the character's name and a skipped one reported success. Both import paths now share one reporting function instead of duplicating it. That path also never triggered the item-cache warm-up for the newly imported data
 - Fixed a pending-item entry leaking when `ITEM_DATA_LOAD_RESULT` reported success but the item still could not be resolved. The entry was only cleared inside the success branch, so it stayed queued forever and kept `ITEM_DATA_LOAD_RESULT` registered for the rest of the session
