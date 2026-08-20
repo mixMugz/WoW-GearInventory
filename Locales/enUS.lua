@@ -34,7 +34,8 @@ L["CHAR_AVG_ILVL"]       = "Avg ilvl: %s"
 
 -- ─── Character List Panel ─────────────────────────────────────────────────────
 
-L["PANEL_CHARACTERS"]    = "CHARACTERS"
+L["PANEL_CHARACTERS"]    = "Characters"
+L["LABEL_ITEMS"]         = "Items"
 L["HINT_SELECT_CHAR"]    = "\226\134\144 Select a character"  -- ← arrow (UTF-8)
 
 -- ─── Equipment Slot Names ────────────────────────────────────────────────────
@@ -70,6 +71,10 @@ L["CTX_DELETE_CHAR"]        = "|cFFFF4444Delete...|r"
 L["DELETE_ALL_CHARS"]       = "|cFFFF4444Delete...|r |cFF888888(All Characters)|r"
 L["DELETE_ALL_CONFIRM"]     = "Delete ALL saved characters from Gear Inventory? This cannot be undone."
 L["DELETE_ALL_DONE"]        = "|cFFFF4444%d|r |cFFFFFFFFcharacter(s) deleted.|r"
+L["DELETE_PICKER_TITLE"]    = "What to remove?"
+L["DELETE_EVERYTHING"]      = "Everything"
+L["SPEC_REMOVED"]           = "%s spec removed from %s."
+L["CHAR_REMOVED"]           = "%s removed."
 
 -- ─── Tooltip Hints ────────────────────────────────────────────────────────────
 
@@ -110,6 +115,13 @@ L["OPT_COLOR_UPGRADE"]   = "Colorize upgrade rank"
 L["OPT_COLOR_STARS"]     = "Colorize upgrade stars"
 L["OPT_DEBUG_MESSAGES"]  = "Debug messages"
 L["OPT_CHARACTERS"]      = "Saved Characters"
+
+-- ─── Saved Characters Panel Columns ──────────────────────────────────────────
+-- Displayed as written; nothing uppercases them.
+
+L["COL_LAST_UPDATE"]     = "Last update"
+L["COL_RECOMMENDATIONS"] = "Recommendations"
+L["COL_DELETE"]          = "Delete"
 
 -- ─── Export / Import ──────────────────────────────────────────────────────────
 

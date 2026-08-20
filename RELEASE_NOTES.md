@@ -59,6 +59,17 @@
 - A deferred scan now reports back when it finally runs, so a queued scan is never left unaccounted for. Ordinary scans stay silent — they fire on every gear and spec change
 - Gear scans report an explicit failure line when the database is not ready
 
+### Localisation
+
+- Nine hardcoded English strings moved into locale keys: the main window `Items` label, the Saved Characters column headers, the delete picker title and its `Everything` button, and the two removal messages printed to chat
+- Nothing in the addon is force-uppercased any more: column headers, the `Items` label and the character list group headers all render exactly as their text is written. `PANEL_CHARACTERS` is stored in normal case accordingly
+- `PANEL_CHARACTERS` now doubles as the Characters column header instead of a second key saying the same word
+
+### Code Comments
+
+- File headers no longer name files that do not exist. `db.lua` pointed at the long-deleted `Options/config.lua` for the config defaults, which live in `Addons/core.lua`; `libs.lua` and `ui.lua` used old capitalised filenames
+- The `OnCharacterDataUpdated` section header in `ui.lua` claimed the callback was invoked by `GearInventory.lua` and `Broker.lua`. There is no `GearInventory.lua`, and the broker stopped wrapping that callback when its item-level display was removed. Only `main.lua` calls it
+
 ### Bug Fixes
 
 - Item-cache queue keys now include the character. Two saved characters holding the same item in the same slot shared one key, so `WarmUpAllCharacters` skipped the second and left its row on the `Loading...` placeholder until that character was logged into. The cache warm-up itself was never affected — `RequestLoadItemDataByID` fills a client-wide cache

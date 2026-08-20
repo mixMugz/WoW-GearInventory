@@ -1,4 +1,4 @@
--- GearInventory/Addons/UI.lua
+-- GearInventory/Addons/ui.lua
 -- Main window, character list panel, gear slot panel, item tooltips.
 -- All UI creation is deferred until GI.ToggleMainWindow() is first called.
 
@@ -409,7 +409,7 @@ local function CharList_GroupHeader(btn, nodeArg)
   btn.groupKey = entry.groupKey
   local collapsed = collapsedGroups[entry.groupKey]
   btn.arrowT:SetAtlas(collapsed and "glues-characterSelect-icon-plus" or "glues-characterSelect-icon-minus")
-  btn.labelFS:SetText(entry.label:upper() .. " (" .. (entry.count or 0) .. ")")
+  btn.labelFS:SetText(entry.label .. " (" .. (entry.count or 0) .. ")")
 end
 
 local function CharList_CharButton(btn, nodeArg)
@@ -935,7 +935,7 @@ local function CreateMainWindow()
   -- ITEMS label
   local itemsLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   itemsLabel:SetPoint("TOPLEFT", charInfoFS, "BOTTOMLEFT", 0, -6)
-  itemsLabel:SetText("|cFF8A6A30ITEMS|r")
+  itemsLabel:SetText("|cFF8A6A30" .. L["LABEL_ITEMS"] .. "|r")
 
   -- ── Gear rows container ────────────────────────────────────────────────────
 
@@ -1231,7 +1231,7 @@ function GI.ToggleMainWindow()
   end
 end
 
--- ─── Callback: invoked by GearInventory.lua and Broker.lua ───────────────────
+-- ─── Callback: invoked by main.lua ────────────────────────────────────────────
 
 GI.OnCharacterDataUpdated = function(charKey)
   -- Always refresh the Options char list (panel may be open even if main window is not).

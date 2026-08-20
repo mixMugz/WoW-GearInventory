@@ -1,6 +1,6 @@
--- GearInventory/Addons/Libs.lua
+-- GearInventory/Addons/libs.lua
 -- Detects optional external libraries that may be loaded before this addon.
--- Sets GI.ldb and GI.dbicon so Broker.lua and Minimap.lua are library-agnostic.
+-- Sets GI.ldb and GI.dbicon so broker.lua and minimap.lua are library-agnostic.
 --
 --   GI.ldb    -- LibDataBroker-1.1  (bundled by Bazooka and most LDB displays)
 --   GI.dbicon -- LibDBIcon-1.0      (bundled by SexyMap, HandyNotes, and others)

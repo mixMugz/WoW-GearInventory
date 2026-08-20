@@ -154,7 +154,7 @@ local function BuildCharPanel()
   local SF_RIGHT_OFS = -20
 
   local hCharacters = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-  hCharacters:SetText("CHARACTERS")
+  hCharacters:SetText(L["PANEL_CHARACTERS"])
   hCharacters:SetJustifyH("LEFT")
   hCharacters:SetPoint("TOPLEFT", 34, -52)
   hCharacters:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT",
@@ -162,21 +162,21 @@ local function BuildCharPanel()
   charPanel.hCharacters = hCharacters
 
   local hLastUpdate = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-  hLastUpdate:SetText("LASTUPDATE")
+  hLastUpdate:SetText(L["COL_LAST_UPDATE"])
   hLastUpdate:SetJustifyH("CENTER")
   hLastUpdate:SetWidth(colLastUpdW)
   hLastUpdate:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW - colSpecsW, -52)
   charPanel.hLastUpdate = hLastUpdate
 
   local hRec = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-  hRec:SetText("RECOMMENDATIONS")
+  hRec:SetText(L["COL_RECOMMENDATIONS"])
   hRec:SetJustifyH("CENTER")
   hRec:SetWidth(colSpecsW)
   hRec:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS - colDeleteW, -52)
   charPanel.hRec = hRec
 
   local hDel = charPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-  hDel:SetText("DELETE")
+  hDel:SetText(L["COL_DELETE"])
   hDel:SetJustifyH("CENTER")
   hDel:SetWidth(colDeleteW)
   hDel:SetPoint("TOPRIGHT", charPanel, "TOPRIGHT", SF_RIGHT_OFS, -52)
@@ -467,7 +467,7 @@ local function GetOrCreatePicker()
   picker:Hide()
 
   ButtonFrameTemplate_HidePortrait(picker)
-  picker.TitleContainer.TitleText:SetText("What to remove?")
+  picker.TitleContainer.TitleText:SetText(L["DELETE_PICKER_TITLE"])
 
   picker.CloseButton:Hide()
   if picker.Inset then picker.Inset:Hide() end
@@ -531,7 +531,7 @@ local function GetOrCreatePicker()
 
   -- "Everything" button — standard WoW button
   local allBtn = CreateFrame("Button", nil, picker, "UIPanelButtonTemplate")
-  allBtn:SetText("Everything")
+  allBtn:SetText(L["DELETE_EVERYTHING"])
   allBtn:SetScript("OnClick", function()
     local ck         = picker.charKey
     local cName      = picker.coloredName
@@ -675,9 +675,9 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_SPEC"] = {
     if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
     local raceMarkup = GI.RaceIconMarkup(self.data.raceFile, self.data.sex)
     local iconMarkup = specIcon and ("|T" .. specIcon .. ":14:14|t ") or ""
-    GI.Print(
-      iconMarkup .. (self.data.coloredSpec or ("|cFFFF4444" .. (specName or "?") .. "|r"))
-      .. " spec removed from " .. raceMarkup .. (self.data.coloredName or ("|cFFFF4444" .. charKey .. "|r")) .. ".")
+    GI.Print(string.format(L["SPEC_REMOVED"],
+      iconMarkup .. (self.data.coloredSpec or ("|cFFFF4444" .. (specName or "?") .. "|r")),
+      raceMarkup .. (self.data.coloredName or ("|cFFFF4444" .. charKey .. "|r"))))
   end,
   timeout = 0,
   whileDead = true,
@@ -709,8 +709,8 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_CHAR"] = {
         GI.ShowCharacterGear(myKey)
       end
     end
-    GI.Print(
-      raceMarkup .. (coloredName or ("|cFFFF4444" .. charKey .. "|r")) .. " removed.")
+    GI.Print(string.format(L["CHAR_REMOVED"],
+      raceMarkup .. (coloredName or ("|cFFFF4444" .. charKey .. "|r"))))
     GI.RefreshCharacterList()
     if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
   end,

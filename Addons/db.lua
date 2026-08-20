@@ -14,7 +14,7 @@ function GI.InitDB()
   end
   GI.db = GearInventoryDB
 
-  -- Apply default config values (defined in Options/config.lua)
+  -- Apply default config values (defined in Addons/core.lua)
   if GI.ApplyDefaults then
     GI.ApplyDefaults()
   end
