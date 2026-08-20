@@ -1087,10 +1087,12 @@ function GI.ShowCharacterGear(charKey)
       -- Icon border — colored by item quality
       row.iconBorder:SetVertexColor(qr, qg, qb)
 
-      -- Upgrade track badge (top-left of icon) — "1/6" only
-      -- Slot name + upgrade track
-      if item.upTrack then
-        local rank = item.upRank or 1
+      -- Slot name + upgrade track. The track is resolved from the item link on
+      -- every render (never read from the DB), so a season change applies to
+      -- saved characters without rescanning them — see GI.GetSlotUpgrade.
+      local upTrack, upCur, upMax, upRank = GI.GetSlotUpgrade(item)
+      if upTrack then
+        local rank = upRank or 1
         -- Star texture by tier (if enabled): 1=iron, 2-3=bronze, 4=silver, 5=gold
         local filledTex
         if GI.Config.Get("colorUpgradeStars") ~= false then
@@ -1109,9 +1111,9 @@ function GI.ShowCharacterGear(charKey)
         end
         local stars = table.concat(allStars, " ")
         local progressHex = GI.Config.Get("colorUpgradeRank") ~= false
-          and (PROGRESS_COLORS[math.min(item.upCur, #PROGRESS_COLORS)] or "AAAAAA")
+          and (PROGRESS_COLORS[math.min(upCur, #PROGRESS_COLORS)] or "AAAAAA")
           or "AAAAAA"
-        row.slotFS:SetText(L[slot.key] .. "  " .. stars .. "  |cFF" .. progressHex .. item.upCur .. "/" .. item.upMax .. "|r")
+        row.slotFS:SetText(L[slot.key] .. "  " .. stars .. "  |cFF" .. progressHex .. upCur .. "/" .. upMax .. "|r")
       else
         row.slotFS:SetText(L[slot.key])
       end

@@ -314,6 +314,17 @@ function GI.ParseUpgradeTrack(itemLink)
   return nil
 end
 
+-- Resolves the upgrade track of a stored gear slot from its saved itemLink.
+-- Nothing about the track is persisted: deriving it on demand means a season
+-- change (new bonusIDs in GI.UPGRADE_TRACKS above) applies to every saved
+-- character at once, with no rescan, and gear from a past season correctly
+-- resolves to no track instead of reporting a stale one.
+-- Returns: track, cur, max, rank  or nil
+function GI.GetSlotUpgrade(slot)
+  if not slot or not slot.link then return nil end
+  return GI.ParseUpgradeTrack(slot.link)
+end
+
 -- ─── Textures & Atlases ───────────────────────────────────────────────────────
 local ADDON_TEX = "Interface\\AddOns\\GearInventory\\Textures\\"
 

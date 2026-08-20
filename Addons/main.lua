@@ -321,11 +321,8 @@ local function ScanCharacterGear(isLoginScan)
         local finalQ = math.max(quality or 0, prevQ or 0)
         if finalQ == 0 then finalQ = 1 end
 
-        local upTrack, upCur, upMax, upRank
-        if GI.ParseUpgradeTrack then
-          upTrack, upCur, upMax, upRank = GI.ParseUpgradeTrack(itemLink)
-        end
-
+        -- Upgrade track is intentionally not stored — GI.GetSlotUpgrade derives
+        -- it from the link at display time so a season change needs no rescan.
         specSlots[skey] = {
           id      = itemID,
           link    = itemLink,
@@ -334,10 +331,6 @@ local function ScanCharacterGear(isLoginScan)
           quality = finalQ,
           icon    = C_Item.GetItemIconByID(itemID),
           expac   = expacID,
-          upTrack = upTrack,
-          upCur   = upCur,
-          upMax   = upMax,
-          upRank  = upRank,
           cached  = true,
         }
         if isLoginScan then
@@ -405,6 +398,9 @@ function GI.WarmUpAllCharacters()
       for specID, bucket in pairs(d.gear) do
         if bucket.slots then
           for skey, slot in pairs(bucket.slots) do
+            -- Upgrade track is derived on demand now; drop the values persisted
+            -- by older versions so saved data matches the documented schema.
+            slot.upTrack, slot.upCur, slot.upMax, slot.upRank = nil, nil, nil, nil
             local itemID = slot.id
             if itemID then
               local slotID = tonumber(skey:sub(2))
@@ -583,15 +579,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             slot.icon    = C_Item.GetItemIconByID(itemID) or slot.icon
             slot.cached  = true
             slot.expac   = expacID or slot.expac
-            if GI.ParseUpgradeTrack then
-              local t, c, m, r = GI.ParseUpgradeTrack(resolvedLink)
-              if t then
-                slot.upTrack = t
-                slot.upCur   = c
-                slot.upMax   = m
-                slot.upRank  = r
-              end
-            end
             -- FetchAvgIlvl() returns the current player's value only — skip for other chars.
             local myKey = UnitName("player") and GetRealmName()
               and (UnitName("player") .. "-" .. GetRealmName()) or nil

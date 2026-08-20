@@ -11,6 +11,14 @@
 - **Upgrade tracks updated to Season 2** — Adventurer `12817`, Veteran `12825`, Champion `12833`, Hero `12841`, Myth `12849`, 6 ranks each
 - Season 1 bonusIDs removed; only the current season is tracked, past-season gear no longer resolves to a track
 
+### Upgrade Track — Derived, Not Stored
+
+- Upgrade track is now resolved from the saved item link on every render via `GI.GetSlotUpgrade` instead of being baked into the DB at scan time
+- A season change now applies to every saved character immediately — no need to log into each alt to refresh their tracks
+- Gear from a past season correctly shows no track instead of reporting a stale one
+- `upTrack`, `upCur`, `upMax`, `upRank` removed from the slot schema; values written by older versions are stripped on the next warm-up pass
+- Fixed the deferred item-load handler keeping a stale track: it only overwrote the stored values when a track was found, so an outdated one survived indefinitely
+
 ---
 
 ## v12.0.1 `#0004`
