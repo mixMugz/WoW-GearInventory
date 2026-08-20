@@ -525,13 +525,13 @@ local function CharList_CharButton(btn, nodeArg)
           rootDescription:CreateButton(L["CTX_EXPORT_CHAR"], function()
             local str, err = GI.ExportCharacter(key)
             if not str then
-              print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["EXPORT_ERR"])
+              GI.Print(L["EXPORT_ERR"])
               return
             end
             local raceIcon    = GI.RaceIconMarkup(ch.raceFile, ch.sex)
             local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
             local coloredFull = raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
-            print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["EXPORT_OK_CHAR"], coloredFull))
+            GI.Print(string.format(L["EXPORT_OK_CHAR"], coloredFull))
             StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
           end)
 
@@ -755,6 +755,13 @@ local function CreateMainWindow()
       function() GI.Config.Set("colorUpgradeStars", GI.Config.Get("colorUpgradeStars") == false) end
     )
 
+    -- ── Messages ──────────────────────────────────────────────────────────────
+    rootDescription:CreateCheckbox(
+      L["OPT_DEBUG_MESSAGES"],
+      function() return GI.Config.Get("debugMessages") ~= false end,
+      function() GI.Config.Set("debugMessages", GI.Config.Get("debugMessages") == false) end
+    )
+
     rootDescription:CreateSpacer()
 
     -- ── Export / Import ───────────────────────────────────────────────────────
@@ -765,10 +772,10 @@ local function CreateMainWindow()
     rootDescription:CreateButton(L["EXPORT_ALL"], function()
       local str, err = GI.ExportAll()
       if not str then
-        print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["EXPORT_ERR"])
+        GI.Print(L["EXPORT_ERR"])
         return
       end
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["EXPORT_OK_FULL"])
+      GI.Print(L["EXPORT_OK_FULL"])
       StaticPopup_Show("GEARINVENTORY_EXPORT", nil, nil, str)
     end)
 
@@ -1259,15 +1266,15 @@ local function ApplyImportAndPrint(importType, importData, skipExisting)
   local count, overwritten, skipped, charKey, writtenKeys = GI.ApplyImport(importType, importData, skipExisting)
   if importType == "char" then
     if count == 0 and overwritten == 0 then
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_SKIP_CURRENT"])
+      GI.Print(L["IMPORT_SKIP_CURRENT"])
     else
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
+      GI.Print(string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
     end
   else
     if overwritten > 0 then
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL_OW"], count, overwritten, skipped))
+      GI.Print(string.format(L["IMPORT_OK_FULL_OW"], count, overwritten, skipped))
     else
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(L["IMPORT_OK_FULL"], count, skipped))
+      GI.Print(string.format(L["IMPORT_OK_FULL"], count, skipped))
     end
   end
   if writtenKeys and #writtenKeys > 0 and GI.WarmUpAllCharacters then
@@ -1321,7 +1328,7 @@ StaticPopupDialogs["GEARINVENTORY_IMPORT"] = {
     local str = self.EditBox:GetText()
     local importType, data, conflicts, err = GI.ParseImport(str)
     if err then
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["IMPORT_INVALID"])
+      GI.Print(L["IMPORT_INVALID"])
       return
     end
     if #conflicts > 0 then

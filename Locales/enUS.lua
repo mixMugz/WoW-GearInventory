@@ -60,7 +60,9 @@ L["SLOT_OFFHAND"]        = "Off Hand"
 
 -- ─── Gear Scan ────────────────────────────────────────────────────────────────
 
-L["SCAN_QUEUED"]         = "Scan queued — will run after combat ends"
+L["SCAN_QUEUED"]         = "Scan queued — will run after combat ends."
+L["SCAN_DONE"]           = "Queued scan complete."
+L["SCAN_FAILED"]         = "|cFFFF4444Gear scan failed:|r database not ready."
 
 -- ─── Character Delete ───────────────────────────────────────────────────────
 
@@ -108,6 +110,7 @@ L["OPT_GROUP_ARMOR"]     = "Armor Type"
 L["OPT_SHOW_MINIMAP"]    = "Show minimap button"
 L["OPT_COLOR_UPGRADE"]   = "Colorize upgrade rank"
 L["OPT_COLOR_STARS"]     = "Colorize upgrade stars"
+L["OPT_DEBUG_MESSAGES"]  = "Debug messages"
 L["OPT_CHARACTERS"]      = "Saved Characters"
 
 -- ─── Export / Import ──────────────────────────────────────────────────────────

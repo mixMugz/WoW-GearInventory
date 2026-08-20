@@ -675,8 +675,8 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_SPEC"] = {
     if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
     local raceMarkup = GI.RaceIconMarkup(self.data.raceFile, self.data.sex)
     local iconMarkup = specIcon and ("|T" .. specIcon .. ":14:14|t ") or ""
-    print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: "
-      .. iconMarkup .. (self.data.coloredSpec or ("|cFFFF4444" .. (specName or "?") .. "|r"))
+    GI.Print(
+      iconMarkup .. (self.data.coloredSpec or ("|cFFFF4444" .. (specName or "?") .. "|r"))
       .. " spec removed from " .. raceMarkup .. (self.data.coloredName or ("|cFFFF4444" .. charKey .. "|r")) .. ".")
   end,
   timeout = 0,
@@ -709,8 +709,8 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_CHAR"] = {
         GI.ShowCharacterGear(myKey)
       end
     end
-    print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: "
-      .. raceMarkup .. (coloredName or ("|cFFFF4444" .. charKey .. "|r")) .. " removed.")
+    GI.Print(
+      raceMarkup .. (coloredName or ("|cFFFF4444" .. charKey .. "|r")) .. " removed.")
     GI.RefreshCharacterList()
     if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
   end,

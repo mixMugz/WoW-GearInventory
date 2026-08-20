@@ -191,9 +191,9 @@ function GI.ToggleMinimapButton()
     else              GI.minimapButton:Show() end
   end
 
-  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: "
-    .. L["MINIMAP_BUTTON"] .. " "
-    .. (nowHidden and L["MINIMAP_HIDDEN"] or L["MINIMAP_SHOWN"])
+  GI.Print(
+    L["MINIMAP_BUTTON"] .. " "
+    .. (nowHidden and L["MINIMAP_HIDDEN"] or L["MINIMAP_SHOWN"]) .. "."
     .. "  |cFFAAAAAA(/gi minimap)|r")
 end
 

@@ -38,6 +38,13 @@
 - Replaced the deprecated `GetSpecialization` / `GetSpecializationInfo` globals with `C_SpecializationInfo.*`. Both were compatibility shims loaded only while the `loadDeprecationFallbacks` CVar is set, and Blizzard has them slated for removal — the addon would have broken outright without them
 - Upgrade track parsing now reads exactly `numBonusIDs` entries from the item link instead of everything up to the end of the string. Trailing modifier values were being scanned as if they were bonusIDs and could have matched an upgrade track range by coincidence
 
+### Chat Messages
+
+- **All addon chat output now goes through one gate** (`GI.Print` / `GI.PrintRaw`), replacing 20 scattered `print()` calls that each repeated the addon prefix by hand
+- **New `Debug messages` option** in the title bar settings dropdown — on by default, stored in the DB. Switching it off silences every addon message: scan queued/complete/failed, import, export, deletions, the minimap toggle and the login banner
+- A deferred scan now reports back when it finally runs, so a queued scan is never left unaccounted for. Ordinary scans stay silent — they fire on every gear and spec change
+- Gear scans report an explicit failure line when the database is not ready
+
 ### Bug Fixes
 
 - Fixed a queued scan being thrown away on death. Changing gear in combat defers the scan, but `PLAYER_DEAD` cleared the queue outright, so dying before combat ended dropped it with nothing left to retry — resurrecting fired no scan either. The queue now survives, and `PLAYER_UNGHOST` / `PLAYER_ALIVE` retry it alongside `PLAYER_REGEN_ENABLED`

@@ -110,6 +110,29 @@ function GI.SpecInfo(specID)
   return name, icon
 end
 
+-- ─── Chat Output ──────────────────────────────────────────────────────────────
+-- Every addon message goes through here, so the "debug messages" setting can
+-- silence all of them from one place. Output stays on unless explicitly switched
+-- off, which also means it works before the DB is initialised.
+
+local CHAT_PREFIX = "|cFF00C9FFGear|r|cFFFFFFFFInventory|r: "
+
+local function MessagesEnabled()
+  return GI.Config.Get("debugMessages") ~= false
+end
+
+-- Prints an addon message behind the standard prefix.
+function GI.Print(msg)
+  if not MessagesEnabled() then return end
+  print(CHAT_PREFIX .. msg)
+end
+
+-- Prints a line verbatim; the login banner builds its own layout.
+function GI.PrintRaw(msg)
+  if not MessagesEnabled() then return end
+  print(msg)
+end
+
 -- Fills a GameTooltip-compatible object with all saved characters (by avg ilvl).
 -- Used by broker.lua (LDB OnTooltipShow) and minimap.lua (manual OnEnter).
 function GI.BuildCharacterTooltip(tip)
@@ -221,16 +244,22 @@ local eventFrame -- forward-declared; assigned below
 
 local function ScanCharacterGear(isLoginScan)
   local L = GI.L
-  if not GI.db then return end
+  if not GI.db then
+    GI.Print(L["SCAN_FAILED"])
+    return
+  end
 
   -- Defer scan if in combat or dead; PLAYER_REGEN_ENABLED will retry.
   if InCombatLockdown() or UnitIsDeadOrGhost("player") then
     if not pendingScan then
       pendingScan = true
-      print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. L["SCAN_QUEUED"])
+      GI.Print(L["SCAN_QUEUED"])
     end
     return
   end
+  -- Remember whether this run is draining a deferred scan; only that case is
+  -- worth announcing, since the user was told a scan was queued.
+  local wasQueued = pendingScan
   pendingScan = false
 
   local charName          = UnitName("player")
@@ -402,6 +431,12 @@ local function ScanCharacterGear(isLoginScan)
   -- indicator never shows; deferred loading only corrects per-slot display.
   ilvlReady[key] = true
 
+  -- Close the loop on a queued scan. Ordinary scans stay silent: they fire on
+  -- every gear and spec change, and nobody asked for them.
+  if wasQueued then
+    GI.Print(L["SCAN_DONE"])
+  end
+
   if GI.OnCharacterDataUpdated then
     GI.OnCharacterDataUpdated(key)
   end
@@ -416,7 +451,7 @@ function GI.DeleteAllCharacters()
   for _ in pairs(GI.db.characters) do count = count + 1 end
   GI.db.characters = {}
   ilvlReady = {}
-  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r: " .. string.format(GI.L["DELETE_ALL_DONE"], count))
+  GI.Print(string.format(GI.L["DELETE_ALL_DONE"], count))
   GI.ScanCurrentCharacter()
 end
 
@@ -675,15 +710,15 @@ end
 
 local _L = GI.L
 C_Timer.After(0.5, function()
-  print("|cFFFFFFFF---------|r")
+  GI.PrintRaw("|cFFFFFFFF---------|r")
   local _ver = GI.VERSION or ""
   local _base, _build = _ver:match("^(.-)#(.+)$")
   local _verStr = _base and _build
     and ("|cFFAAAAAA" .. _base .. "|r|cFF888888#" .. _build .. "|r")
     or  ("|cFFAAAAAA" .. _ver .. "|r")
-  print("|cFF00C9FFGear|r|cFFFFFFFFInventory|r " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
-  print("    " .. string.format(_L["CMD_TOGGLE"],  _L["ACT_TOGGLE_WINDOW"]))
-  print("    " .. string.format(_L["CMD_OPTIONS"], _L["ACT_OPEN_SETTINGS"]))
-  print("    " .. string.format(_L["CMD_MINIMAP"], _L["ACT_TOGGLE_MINIMAP"]))
-  print("|cFFFFFFFF---------|r")
+  GI.PrintRaw("|cFF00C9FFGear|r|cFFFFFFFFInventory|r " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
+  GI.PrintRaw("    " .. string.format(_L["CMD_TOGGLE"],  _L["ACT_TOGGLE_WINDOW"]))
+  GI.PrintRaw("    " .. string.format(_L["CMD_OPTIONS"], _L["ACT_OPEN_SETTINGS"]))
+  GI.PrintRaw("    " .. string.format(_L["CMD_MINIMAP"], _L["ACT_TOGGLE_MINIMAP"]))
+  GI.PrintRaw("|cFFFFFFFF---------|r")
 end)

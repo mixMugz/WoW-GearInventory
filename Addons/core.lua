@@ -417,6 +417,7 @@ GI.DEFAULTS = {
     groupBy           = "none", -- "none" | "realm" | "faction" | "armor"
 colorUpgradeRank  = true,   -- colorize upgrade progress (1/6) by step
     colorUpgradeStars = true,   -- colorize star icons by rank tier (iron/bronze/silver/gold)
+    debugMessages     = true,   -- chat output; false silences every addon message
     minimapButton = {
       hide  = false,
       angle = 220, -- fallback angle when LibDBIcon is absent
