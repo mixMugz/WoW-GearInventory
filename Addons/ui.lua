@@ -136,6 +136,33 @@ local function GetGroupKey(data, groupBy)
   if groupBy == "armor"   then return GI.CLASS_ARMOR[ch.class] or "Unknown" end
 end
 
+-- Group-by radio set, shared by the settings dropdown and the group header
+-- context menu so the option list is defined once.
+-- keepOpen: leave the menu open and refresh it after a pick, as the Sort submenu does.
+local GROUP_BY_OPTIONS = {
+  { "none",    "OPT_GROUP_NONE"    },
+  { "realm",   "OPT_GROUP_REALM"   },
+  { "faction", "OPT_GROUP_FACTION" },
+  { "armor",   "OPT_GROUP_ARMOR"   },
+}
+
+local function AddGroupByRadios(description, keepOpen)
+  local function getter(v) return (GI.Config.Get("groupBy") or "none") == v end
+  local function setter(v)
+    GI.Config.Set("groupBy", v)
+    GI.RefreshCharacterList()
+  end
+  for _, opt in ipairs(GROUP_BY_OPTIONS) do
+    local radio = description:CreateRadio(L[opt[2]], getter, setter, opt[1])
+    if keepOpen then
+      radio:SetResponder(function(data)
+        setter(data)
+        return MenuResponse.Refresh
+      end)
+    end
+  end
+end
+
 -- ─── Widget Pools ─────────────────────────────────────────────────────────────
 
 local gearRows       = {}
@@ -372,12 +399,7 @@ local function CharList_GroupHeader(btn, nodeArg)
       if mouseButton == "RightButton" then
         MenuUtil.CreateContextMenu(self, function(_, rootDescription)
           rootDescription:CreateTitle(L["OPT_GROUP_BY"])
-          local function groupGetter(v) return GI.Config.Get("groupBy") == v end
-          local function groupSetter(v) GI.Config.Set("groupBy", v) GI.RefreshCharacterList() end
-          rootDescription:CreateRadio(L["OPT_GROUP_NONE"],    groupGetter, groupSetter, "none")
-          rootDescription:CreateRadio(L["OPT_GROUP_REALM"],   groupGetter, groupSetter, "realm")
-          rootDescription:CreateRadio(L["OPT_GROUP_FACTION"], groupGetter, groupSetter, "faction")
-          rootDescription:CreateRadio(L["OPT_GROUP_ARMOR"],   groupGetter, groupSetter, "armor")
+          AddGroupByRadios(rootDescription)
         end)
         return
       end
@@ -711,6 +733,11 @@ local function CreateMainWindow()
         radio:SetEnabled(function() return GI.Config.Get("sortOrder") ~= opt[1] end)
       end
     end
+
+    -- ── Group by ──────────────────────────────────────────────────────────────
+    -- Also reachable by right-clicking a group header in the character list.
+    local groupSub = rootDescription:CreateButton(L["OPT_GROUP_BY"])
+    AddGroupByRadios(groupSub, true)
 
     rootDescription:CreateSpacer()
 

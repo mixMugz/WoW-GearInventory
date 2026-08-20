@@ -19,6 +19,12 @@
 - `upTrack`, `upCur`, `upMax`, `upRank` removed from the slot schema; values written by older versions are stripped on the next warm-up pass
 - Fixed the deferred item-load handler keeping a stale track: it only overwrote the stored values when a track was found, so an outdated one survived indefinitely
 
+### Main Window — Settings Menu
+
+- **Group by** submenu added to the title bar settings dropdown, next to Sort by — previously the only way to change grouping was right-clicking a group header, which was not discoverable
+- Group-by option list extracted into a single shared builder used by both the settings dropdown and the group header context menu
+- `Sorting` renamed to `Sort characters by` to match `Group characters by`
+
 ### Bug Fixes
 
 - Fixed item level of level-scaling gear (heirlooms) showing the unscaled value — item level is now read from the equipped instance via `C_Item.GetCurrentItemLevel` before falling back to the link
