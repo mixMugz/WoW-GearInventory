@@ -7,7 +7,7 @@ local addonName, GI = ...
 GI.L = setmetatable({}, { __index = function(_, k) return k end })
 
 -- ─── Version ───────────────────────────────────────────────/───────────────────
-GI.VERSION = "12.1.0#0005"
+GI.VERSION = "12.1.0#0006"
 GI.AUTHOR  = "mixMugz (a.k.a. Муади-Ревущийфьорд)"
 
 -- ─── Equipment Slots ──────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@
 ## Author: mixMugz (a.k.a. Муади-Ревущийфьорд)
 ## IconTexture: Interface\AddOns\GearInventory\Textures\gi_icon
 ## Category: Bags & Inventory
-## Version: |cFF888888 12.1.0#0005|r
+## Version: |cFF888888 12.1.0#0006|r
 ## SavedVariables: GearInventoryDB
 
 ## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, Bazooka, SexyMap
