@@ -40,6 +40,8 @@
 
 ### Bug Fixes
 
+- Fixed the gear bucket of a character's initial specialization being pruned and rebuilt on every scan. The initial spec sits at an index past `GetNumSpecializations`, so it never appeared in the valid-spec list; the active spec is now always treated as valid. Its `incRecommend` setting could never be kept before this
+- Fixed the spec-name fallbacks never firing: an unnamed spec comes back as an empty string rather than nil, and `""` is truthy in Lua. Spec lookups now go through `GI.SpecInfo`, which normalises the empty name to nil so callers' fallbacks work
 - Fixed item level of level-scaling gear (heirlooms) showing the unscaled value — item level is now read from the equipped instance via `C_Item.GetCurrentItemLevel` before falling back to the link
 - Replaced the deprecated `GetDetailedItemLevelInfo` global with `C_Item.GetDetailedItemLevelInfo`; dropped the `GetInventoryItemLevel` fallback, which is no longer part of the API
 - Fixed the deferred item-load handler overwriting saved characters' item levels with a link-derived value on every login — item level is now only refreshed when the live equipped instance can be read, otherwise the value captured by that character's own scan is kept

@@ -516,7 +516,7 @@ local function CharList_CharButton(btn, nodeArg)
           local specList = {}
           if d.gear then
             for specID in pairs(d.gear) do
-              local _, specName, _, specIcon = GetSpecializationInfoByID(specID)
+              local specName, specIcon = GI.SpecInfo(specID)
               specList[#specList + 1] = { specID = specID, name = specName or tostring(specID), icon = specIcon }
             end
           end

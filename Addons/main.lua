@@ -98,6 +98,18 @@ function GI.RaceIconMarkup(raceFile, sex, size)
   return "|A:" .. atlas .. ":" .. size .. ":" .. size .. "|a "
 end
 
+-- Returns the display name and icon of a specialization.
+-- GetSpecializationInfoByID yields an empty string, not nil, for a spec that has
+-- no name — the placeholder one a character carries before choosing a real spec.
+-- Since "" is truthy in Lua, a bare `or` fallback at the call site can never fire,
+-- so the empty string is normalised to nil here and the trap stays in one place.
+-- Returns: name (nil when the spec has none), icon
+function GI.SpecInfo(specID)
+  local _, name, _, icon = GetSpecializationInfoByID(specID)
+  if name == "" then name = nil end
+  return name, icon
+end
+
 -- Fills a GameTooltip-compatible object with all saved characters (by avg ilvl).
 -- Used by broker.lua (LDB OnTooltipShow) and minimap.lua (manual OnEnter).
 function GI.BuildCharacterTooltip(tip)
@@ -274,8 +286,18 @@ local function ScanCharacterGear(isLoginScan)
     local numSpecs = GetNumSpecializations and GetNumSpecializations() or 0
     for i = 1, numSpecs do
       local sid = select(1, C_SpecializationInfo.GetSpecializationInfo(i))
-      if sid then validSpecIDs[sid] = true end
+      -- specId is documented non-nilable with a default of 0, and 0 is truthy in
+      -- Lua, so the explicit zero check is what actually filters here.
+      if sid and sid ~= 0 then validSpecIDs[sid] = true end
     end
+
+    -- The initial spec a character carries before choosing one sits at an index
+    -- past GetNumSpecializations (see Blizzard's IsInitialSpec), so the loop above
+    -- never yields its ID and the bucket would be dropped and rebuilt on every
+    -- scan — silently resetting its incRecommend each time. Whatever spec is
+    -- active right now is valid by definition.
+    if specID then validSpecIDs[specID] = true end
+
     for sid in pairs(d.gear) do
       if not validSpecIDs[sid] then
         d.gear[sid] = nil

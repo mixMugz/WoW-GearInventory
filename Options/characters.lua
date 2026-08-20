@@ -380,7 +380,7 @@ local function BuildCharPanel()
       if d.gear then
         for specID, bucket in pairs(d.gear) do
           if specID ~= 0 then
-            local _, _, _, sIcon = GetSpecializationInfoByID(specID)
+            local _, sIcon = GI.SpecInfo(specID)
             table.insert(specs, { specID = specID, bucket = bucket, icon = sIcon })
           end
         end
@@ -555,7 +555,7 @@ local function ShowDeletePicker(anchorBtn, charKey)
   if entry.gear then
     for specID, bucket in pairs(entry.gear) do
       if specID ~= 0 then
-        local _, specName, _, sIcon = GetSpecializationInfoByID(specID)
+        local specName, sIcon = GI.SpecInfo(specID)
         table.insert(specs, { specID = specID, icon = sIcon, name = specName or "?" })
       end
     end
