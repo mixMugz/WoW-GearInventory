@@ -19,6 +19,12 @@
 - `upTrack`, `upCur`, `upMax`, `upRank` removed from the slot schema; values written by older versions are stripped on the next warm-up pass
 - Fixed the deferred item-load handler keeping a stale track: it only overwrote the stored values when a track was found, so an outdated one survived indefinitely
 
+### Bug Fixes
+
+- Fixed item level of level-scaling gear (heirlooms) showing the unscaled value — item level is now read from the equipped instance via `C_Item.GetCurrentItemLevel` before falling back to the link
+- Replaced the deprecated `GetDetailedItemLevelInfo` global with `C_Item.GetDetailedItemLevelInfo`; dropped the `GetInventoryItemLevel` fallback, which is no longer part of the API
+- Fixed the deferred item-load handler overwriting saved characters' item levels with a link-derived value on every login — item level is now only refreshed when the live equipped instance can be read, otherwise the value captured by that character's own scan is kept
+
 ---
 
 ## v12.0.1 `#0004`

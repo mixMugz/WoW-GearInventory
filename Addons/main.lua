@@ -303,16 +303,19 @@ local function ScanCharacterGear(isLoginScan)
 
       if name then
         -- Effective ilvl priority:
-        --   1. GetDetailedItemLevelInfo(link)  — parses bonus IDs from hyperlink,
-        --      returns the actual displayed level including upgrade rank.
-        --   2. GetInventoryItemLevel — engine fallback for the equipped slot.
-        --   3. ilvl from GetItemInfo — base level, last resort.
+        --   1. C_Item.GetCurrentItemLevel on the equipped slot — the live value of
+        --      this exact item instance. Required for level-scaling gear such as
+        --      heirlooms, where the link alone reports the unscaled level.
+        --   2. C_Item.GetDetailedItemLevelInfo(link) — link-derived, includes
+        --      upgrade rank but ignores scaling.
+        --   3. ilvl from C_Item.GetItemInfo — base level, last resort.
         local effectiveIlvl
-        if itemLink then
-          effectiveIlvl = GetDetailedItemLevelInfo and GetDetailedItemLevelInfo(itemLink)
+        local location = ItemLocation:CreateFromEquipmentSlot(slot.id)
+        if C_Item.DoesItemExist(location) then
+          effectiveIlvl = C_Item.GetCurrentItemLevel(location)
         end
-        if not effectiveIlvl or effectiveIlvl <= 0 then
-          effectiveIlvl = GetInventoryItemLevel("player", slot.id)
+        if (not effectiveIlvl or effectiveIlvl <= 0) and itemLink then
+          effectiveIlvl = C_Item.GetDetailedItemLevelInfo(itemLink)
         end
         effectiveIlvl = effectiveIlvl or ilvl or 0
 
@@ -559,15 +562,21 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
         if charData and specSlots then
           local slot = specSlots[skey]
           if slot and slot.id == itemID then
-            local effectiveIlvl
             local resolvedLink = slot.link or link
-            if resolvedLink then
-              effectiveIlvl = GetDetailedItemLevelInfo and GetDetailedItemLevelInfo(resolvedLink)
-            end
-            if not effectiveIlvl or effectiveIlvl <= 0 then
-              local location = ItemLocation:CreateFromEquipmentSlot(pending.slotID)
-              if C_Item.DoesItemExist(location) and C_Item.GetItemID(location) == itemID then
-                effectiveIlvl = C_Item.GetCurrentItemLevel(location)
+            -- This handler also fires for saved characters (WarmUpAllCharacters
+            -- queues their slots too), so only refresh the item level when the
+            -- live instance is readable — i.e. the current player still has this
+            -- exact item in that slot. For anyone else the value captured by
+            -- their own scan is authoritative: a link-derived level would clobber
+            -- it, and is plain wrong for level-scaling gear such as heirlooms.
+            local location   = ItemLocation:CreateFromEquipmentSlot(pending.slotID)
+            local isLiveSlot = C_Item.DoesItemExist(location)
+                           and C_Item.GetItemID(location) == itemID
+            local effectiveIlvl
+            if isLiveSlot then
+              effectiveIlvl = C_Item.GetCurrentItemLevel(location)
+              if (not effectiveIlvl or effectiveIlvl <= 0) and resolvedLink then
+                effectiveIlvl = C_Item.GetDetailedItemLevelInfo(resolvedLink)
               end
             end
 
@@ -575,7 +584,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             slot.link    = resolvedLink
             slot.quality = math.max(quality or 0, slot.quality or 0)
             if slot.quality == 0 then slot.quality = 1 end
-            slot.ilvl    = effectiveIlvl or ilvl or slot.ilvl or 0
+            if effectiveIlvl and effectiveIlvl > 0 then
+              slot.ilvl = effectiveIlvl
+            elseif not slot.ilvl or slot.ilvl == 0 then
+              -- Never scanned on that character; base level beats showing nothing.
+              slot.ilvl = ilvl or 0
+            end
             slot.icon    = C_Item.GetItemIconByID(itemID) or slot.icon
             slot.cached  = true
             slot.expac   = expacID or slot.expac
