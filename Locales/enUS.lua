@@ -57,6 +57,16 @@ L["SLOT_TRINKET2"]       = "Trinket 2"
 L["SLOT_MAINHAND"]       = "Main Hand"
 L["SLOT_OFFHAND"]        = "Off Hand"
 
+-- ─── Upgrade Track Names ─────────────────────────────────────────────────────
+-- Keyed from the English label in GI.UPGRADE_TRACKS; the client has no source
+-- for these, so they are translated here like any other string.
+
+L["TRACK_ADVENTURER"]    = "Adventurer"
+L["TRACK_VETERAN"]       = "Veteran"
+L["TRACK_CHAMPION"]      = "Champion"
+L["TRACK_HERO"]          = "Hero"
+L["TRACK_MYTH"]          = "Myth"
+
 -- ─── Gear Scan ────────────────────────────────────────────────────────────────
 
 L["SCAN_QUEUED"]         = "Scan queued — will run after combat ends."
@@ -112,7 +122,7 @@ L["OPT_GROUP_FACTION"]   = "Faction"
 L["OPT_GROUP_ARMOR"]     = "Armor Type"
 L["OPT_SHOW_MINIMAP"]    = "Show minimap button"
 L["OPT_COLOR_UPGRADE"]   = "Colorize upgrade rank"
-L["OPT_COLOR_STARS"]     = "Colorize upgrade stars"
+L["OPT_COLOR_TRACK"]     = "Colorize upgrade track"
 L["OPT_DEBUG_MESSAGES"]  = "Debug messages"
 L["OPT_CHARACTERS"]      = "Saved Characters"
 

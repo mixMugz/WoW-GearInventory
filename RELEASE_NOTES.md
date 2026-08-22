@@ -4,6 +4,15 @@
 
 ## v12.1.0 `#0006`
 
+### Main Window — Upgrade Track
+
+- Gear rows now read `Wrist :: Hero` followed by a star bar. The track is named instead of being encoded in the stars, and the stars now show progress through it — filled for ranks earned, empty for ranks left
+- The star bar spans the track's own length rather than a fixed five, so a track with a different number of ranks scales on its own
+- The name is coloured by track rank, which lines up exactly with item quality — Adventurer white, Veteran green, Champion blue, Hero purple, Myth gold — so it reuses `ITEM_QUALITY_COLORS` rather than a palette of its own
+- Track names are locale keys (`TRACK_*`). The client has no source for them: no global string holds one and they only arrive inside the tooltip line, which would leave a track unnamed unless the account owns an item of it
+- `Colorize upgrade track` tints the track name by rank. `Colorize upgrade rank` tints the filled stars by progress instead — bronze for the first two ranks, silver for the next two, gold for the last two; switched off the bar is plain gold. The former was `Colorize upgrade stars` and its stored key changed, so that toggle returns to its default once
+- `GI.ParseUpgradeTrack` and `GI.GetSlotUpgrade` now return the whole track entry instead of a four-value tuple, which stops the signature growing as fields are added
+
 ---
 
 ## v12.1.0 `#0005`

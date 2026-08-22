@@ -319,17 +319,18 @@ local RANK_ILVL_STEP = 3  -- item levels gained per rank inside a track
 GI.UPGRADE_TRACKS = {}
 do
   local tracks = {
-    { name = "Adventurer", rank = 1, start = 12817, ilvl = 266, max = 6 },
-    { name = "Veteran",    rank = 2, start = 12825, ilvl = 279, max = 6 },
-    { name = "Champion",   rank = 3, start = 12833, ilvl = 292, max = 6 },
-    { name = "Hero",       rank = 4, start = 12841, ilvl = 305, max = 6 },
-    { name = "Myth",       rank = 5, start = 12849, ilvl = 318, max = 6 },
+    { name = "Adventurer", key = "TRACK_ADVENTURER", rank = 1, start = 12817, ilvl = 266, max = 6 },
+    { name = "Veteran",    key = "TRACK_VETERAN",    rank = 2, start = 12825, ilvl = 279, max = 6 },
+    { name = "Champion",   key = "TRACK_CHAMPION",   rank = 3, start = 12833, ilvl = 292, max = 6 },
+    { name = "Hero",       key = "TRACK_HERO",       rank = 4, start = 12841, ilvl = 305, max = 6 },
+    { name = "Myth",       key = "TRACK_MYTH",       rank = 5, start = 12849, ilvl = 318, max = 6 },
   }
   for _, t in ipairs(tracks) do
     local ilvlMax = t.ilvl + (t.max - 1) * RANK_ILVL_STEP
     for i = 1, t.max do
       GI.UPGRADE_TRACKS[t.start + i - 1] = {
         track   = t.name,
+        key     = t.key,
         rank    = t.rank,
         cur     = i,
         max     = t.max,
@@ -352,7 +353,8 @@ local ITEM_BONUS_PATTERN = "item:%d+" .. string.rep(":[^:]*", 11) .. ":(%d+):(.*
 -- Only the first numBonusIDs entries are considered — everything past them is
 -- modifier data, whose values are unrelated to bonusIDs and could otherwise
 -- collide with an upgrade track range by coincidence.
--- Returns: track, cur, max, rank  or nil
+-- Returns the shared GI.UPGRADE_TRACKS entry (track, key, rank, cur, max, ilvl,
+-- ilvlMax) or nil. It is shared, so callers must treat it as read-only.
 function GI.ParseUpgradeTrack(itemLink)
   if not itemLink then return nil end
 
@@ -365,9 +367,7 @@ function GI.ParseUpgradeTrack(itemLink)
     seen = seen + 1
     if seen > count then break end
     local info = GI.UPGRADE_TRACKS[tonumber(idStr)]
-    if info then
-      return info.track, info.cur, info.max, info.rank
-    end
+    if info then return info end
   end
   return nil
 end
@@ -377,7 +377,7 @@ end
 -- change (new bonusIDs in GI.UPGRADE_TRACKS above) applies to every saved
 -- character at once, with no rescan, and gear from a past season correctly
 -- resolves to no track instead of reporting a stale one.
--- Returns: track, cur, max, rank  or nil
+-- Returns the shared, read-only GI.UPGRADE_TRACKS entry or nil.
 function GI.GetSlotUpgrade(slot)
   if not slot or not slot.link then return nil end
   return GI.ParseUpgradeTrack(slot.link)
@@ -457,7 +457,7 @@ GI.DEFAULTS = {
     sortDir           = "desc", -- "asc" | "desc"
     groupBy           = "none", -- "none" | "realm" | "faction" | "armor"
 colorUpgradeRank  = true,   -- colorize upgrade progress (1/6) by step
-    colorUpgradeStars = true,   -- colorize star icons by rank tier (iron/bronze/silver/gold)
+    colorUpgradeTrack = true,   -- colorize the upgrade track name by its rank
     debugMessages     = true,   -- chat output; false silences every addon message
     minimapButton = {
       hide  = false,

@@ -16,10 +16,7 @@ local CHAR_ROW_H        = 28
 local GROUP_HEADER_H    = 14
 local GEAR_ROW_H        = 28
 local INFO_H            = 58   -- char info block + ITEMS label + gaps
-local UPGRADE_STAR_COUNT = 5   -- stars per upgrade track (Iron→Bronze→Silver→Gold)
 
--- Upgrade rank progress colors (index = upCur rank, 1-based)
-local PROGRESS_COLORS = { "FF4444", "FF8000", "FFFF00", "00FF00", "0080FF", "FFFFFF" }
 -- Fixed height: title + info block + gear rows + bottom inset.
 local FIXED_H = -BODY_TOP_Y + INFO_H
               + #GI.GEAR_SLOTS * GEAR_ROW_H + BODY_BOT_Y
@@ -741,9 +738,9 @@ local function CreateMainWindow()
       function() GI.Config.Set("colorUpgradeRank", GI.Config.Get("colorUpgradeRank") == false) end
     )
     rootDescription:CreateCheckbox(
-      L["OPT_COLOR_STARS"],
-      function() return GI.Config.Get("colorUpgradeStars") ~= false end,
-      function() GI.Config.Set("colorUpgradeStars", GI.Config.Get("colorUpgradeStars") == false) end
+      L["OPT_COLOR_TRACK"],
+      function() return GI.Config.Get("colorUpgradeTrack") ~= false end,
+      function() GI.Config.Set("colorUpgradeTrack", GI.Config.Get("colorUpgradeTrack") == false) end
     )
 
     -- ── Messages ──────────────────────────────────────────────────────────────
@@ -934,7 +931,7 @@ local function CreateMainWindow()
   GI.mainWindow = f
 
   GI.OnConfigChanged = function(key)
-    if (key == "colorUpgradeRank" or key == "colorUpgradeStars") and selectedKey then
+    if (key == "colorUpgradeRank" or key == "colorUpgradeTrack") and selectedKey then
       GI.ShowCharacterGear(selectedKey)
     end
   end
@@ -1098,33 +1095,42 @@ function GI.ShowCharacterGear(charKey)
       -- Icon border — colored by item quality
       row.iconBorder:SetVertexColor(qr, qg, qb)
 
-      -- Slot name + upgrade track. The track is resolved from the item link on
-      -- every render (never read from the DB), so a season change applies to
-      -- saved characters without rescanning them — see GI.GetSlotUpgrade.
-      local upTrack, upCur, upMax, upRank = GI.GetSlotUpgrade(item)
-      if upTrack then
-        local rank = upRank or 1
-        -- Star texture by tier (if enabled): 1=iron, 2-3=bronze, 4=silver, 5=gold
-        local filledTex
-        if GI.Config.Get("colorUpgradeStars") ~= false then
-          filledTex = rank == 1 and GI.TEX.STAR_FILLED_IRON
-            or rank <= 3 and GI.TEX.STAR_FILLED_BRONZE
-            or rank == 4 and GI.TEX.STAR_FILLED_SILVER
-            or GI.TEX.STAR_FILLED_GOLD
-        else
-          filledTex = GI.TEX.STAR_FILLED_SILVER
+      -- Slot name, upgrade track, then the rank as a star bar. The track is
+      -- resolved from the item link on every render (never read from the DB), so
+      -- a season change applies to saved characters without rescanning them —
+      -- see GI.GetSlotUpgrade.
+      local up = GI.GetSlotUpgrade(item)
+      if up then
+        -- Track ranks run 1..5 and line up exactly with item quality: common,
+        -- uncommon, rare, epic, legendary. No separate palette needed.
+        local trackText = L[up.key]
+        if GI.Config.Get("colorUpgradeTrack") ~= false then
+          local tr, tg, tb = QColor(up.rank)
+          trackText = string.format("|cFF%02X%02X%02X%s|r", tr * 255, tg * 255, tb * 255, trackText)
         end
-        local S = "|T" .. filledTex          .. ":10:10|t"
-        local E = "|T" .. GI.TEX.STAR_EMPTY .. ":10:10|t"
-        local allStars = {}
-        for i = 1, UPGRADE_STAR_COUNT do
-          allStars[i] = (i <= rank) and S or E
+
+        -- Star bar spans the track's own length, so a track with a different
+        -- number of ranks would scale on its own. Colour follows progress
+        -- through the track, not the track itself: 1-2 bronze, 3-4 silver,
+        -- 5-6 gold. Uncoloured, the whole bar is gold against silver empties.
+        local filledTex = GI.TEX.STAR_FILLED_GOLD
+        if GI.Config.Get("colorUpgradeRank") ~= false then
+          if     up.cur <= 2 then filledTex = GI.TEX.STAR_FILLED_BRONZE
+          elseif up.cur <= 4 then filledTex = GI.TEX.STAR_FILLED_SILVER
+          else                    filledTex = GI.TEX.STAR_FILLED_GOLD
+          end
         end
-        local stars = table.concat(allStars, " ")
-        local progressHex = GI.Config.Get("colorUpgradeRank") ~= false
-          and (PROGRESS_COLORS[math.min(upCur, #PROGRESS_COLORS)] or "AAAAAA")
-          or "AAAAAA"
-        row.slotFS:SetText(L[slot.key] .. "  " .. stars .. "  |cFF" .. progressHex .. upCur .. "/" .. upMax .. "|r")
+
+        local filled = "|T" .. filledTex         .. ":10:10|t"
+        local empty  = "|T" .. GI.TEX.STAR_EMPTY .. ":10:10|t"
+        local stars  = {}
+        for i = 1, up.max do
+          stars[i] = (i <= up.cur) and filled or empty
+        end
+
+        -- Separator forced white: the fontstring itself is dimmed grey.
+        row.slotFS:SetText(L[slot.key] .. " |cFFFFFFFF::|r " .. trackText
+          .. "  " .. table.concat(stars, " "))
       else
         row.slotFS:SetText(L[slot.key])
       end
