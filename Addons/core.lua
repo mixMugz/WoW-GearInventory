@@ -277,10 +277,10 @@ GI.SPEC_INFO = {
 -- Parsed from itemLink bonusIDs; independent of client locale.
 -- Current season only — gear from past seasons resolves to no track by design.
 -- When the season changes, replace the start bonusIDs below.
--- Verified in game: Adventurer 12817 and Veteran 12825 at rank 1, and Veteran
--- rank 2 as 12826 — so both axes are measured, not assumed: tracks are 8 apart
--- and ranks step by +1. Champion, Hero and Myth follow the same 8-wide
--- stride Blizzard has used every season.
+-- Verified in game against live items: Adventurer 12817 and Veteran 12825 at
+-- rank 1, Veteran 2/6 as 12826, and Hero 3/6 as 12843. That measures both axes —
+-- tracks 8 apart, ranks +1 — across three points spanning the whole range, so
+-- Champion sits between confirmed neighbours and Myth continues the same run.
 --
 -- How to capture the numbers for a new season: bind this to a key (clicking it
 -- with the mouse moves the pointer off the item and the tooltip closes), hover a
@@ -295,22 +295,46 @@ GI.SPEC_INFO = {
 --
 -- Adventure Guide links are useless for this: they carry a single placeholder
 -- bonusID and get their upgrade line from the difficulty, not from the item.
+--
+-- The names here are internal keys the code matches on, so they stay English.
+-- When a track name needs displaying, give it a locale key like every other
+-- string in the addon.
+--
+-- Do not try to read the name from the client. Checked 2026-08-21: no global
+-- string holds one, they only arrive from the server inside the tooltip line,
+-- and a track could only ever be named if the account happens to own an item of
+-- it. Five translated strings beat a parser with holes in it.
+--
+-- ilvl is the item level of a track at rank 1. Measured in game 2026-08-21 from
+-- five live items: Veteran 1/6 = 279 and 2/6 = 282, Champion 2/6 = 295 and
+-- 3/6 = 298, Hero 3/6 = 311. That fixes the step inside a track at +3 and the
+-- gap between track bases at 13, both on two independent pairs; Adventurer and
+-- Myth sit at the ends of that run.
+--
+-- Note that an item can exceed its own track ceiling — some upgrades push a
+-- Myth item past 333. Anything comparing against ilvlMax must therefore treat
+-- the item's current level as the floor, not assume ilvlMax is the larger one.
+local RANK_ILVL_STEP = 3  -- item levels gained per rank inside a track
+
 GI.UPGRADE_TRACKS = {}
 do
   local tracks = {
-    { name = "Adventurer", rank = 1, start = 12817, max = 6 },
-    { name = "Veteran",    rank = 2, start = 12825, max = 6 },
-    { name = "Champion",   rank = 3, start = 12833, max = 6 },
-    { name = "Hero",       rank = 4, start = 12841, max = 6 },
-    { name = "Myth",       rank = 5, start = 12849, max = 6 },
+    { name = "Adventurer", rank = 1, start = 12817, ilvl = 266, max = 6 },
+    { name = "Veteran",    rank = 2, start = 12825, ilvl = 279, max = 6 },
+    { name = "Champion",   rank = 3, start = 12833, ilvl = 292, max = 6 },
+    { name = "Hero",       rank = 4, start = 12841, ilvl = 305, max = 6 },
+    { name = "Myth",       rank = 5, start = 12849, ilvl = 318, max = 6 },
   }
   for _, t in ipairs(tracks) do
+    local ilvlMax = t.ilvl + (t.max - 1) * RANK_ILVL_STEP
     for i = 1, t.max do
       GI.UPGRADE_TRACKS[t.start + i - 1] = {
-        track = t.name,
-        rank  = t.rank,
-        cur   = i,
-        max   = t.max,
+        track   = t.name,
+        rank    = t.rank,
+        cur     = i,
+        max     = t.max,
+        ilvl    = t.ilvl + (i - 1) * RANK_ILVL_STEP,
+        ilvlMax = ilvlMax,
       }
     end
   end
