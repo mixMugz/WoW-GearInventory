@@ -181,7 +181,7 @@ local function BuildCharPanel()
   measureFS:SetPoint("TOPLEFT", 0, 0)
   charPanel.measureFS = measureFS
 
-  -- Column headers — layout: CHARACTERS | LASTUPDATE | RECOMMENDATIONS | DELETE
+  -- Column headers, left to right: CHARACTERS | LASTUPDATE | RECOMMENDATIONS | EXPORT | DELETE
   -- Right-side headers anchor from panel TOPRIGHT; SF_RIGHT_OFS = scrollbox right edge offset
   local SF_RIGHT_OFS = -20
 
@@ -307,14 +307,14 @@ local function BuildCharPanel()
           icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
           local specMask = specFrame:CreateMaskTexture()
           specMask:SetAllPoints(icon)
-          specMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
+          specMask:SetTexture(GI.TEX.PORTRAIT_MASK,
             "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
           icon:AddMaskTexture(specMask)
 
           local specBorder = specFrame:CreateTexture(nil, "OVERLAY")
           specBorder:SetSize(16, 16)
           specBorder:SetPoint("CENTER")
-          specBorder:SetAtlas("talents-node-circle-gray")
+          specBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
 
           row.specSlots[i] = { icon = icon, frame = specFrame, cb = cb }
         end
@@ -336,13 +336,13 @@ local function BuildCharPanel()
         raceIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         local raceMask = raceFrame:CreateMaskTexture()
         raceMask:SetAllPoints(raceIcon)
-        raceMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
+        raceMask:SetTexture(GI.TEX.PORTRAIT_MASK,
           "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
         raceIcon:AddMaskTexture(raceMask)
         local raceBorder = raceFrame:CreateTexture(nil, "OVERLAY")
         raceBorder:SetSize(16, 16)
         raceBorder:SetPoint("CENTER")
-        raceBorder:SetAtlas("talents-node-circle-gray")
+        raceBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
         row.raceIcon   = raceIcon
         row.raceBorder = raceBorder
         row.raceFrame  = raceFrame
@@ -577,14 +577,14 @@ local function GetOrCreatePicker()
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     local mask = iconFrame:CreateMaskTexture()
     mask:SetAllPoints(icon)
-    mask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
+    mask:SetTexture(GI.TEX.PORTRAIT_MASK,
       "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     icon:AddMaskTexture(mask)
 
     local border = iconFrame:CreateTexture(nil, "OVERLAY")
     border:SetSize(26, 26)
     border:SetPoint("CENTER")
-    border:SetAtlas("talents-node-circle-gray")
+    border:SetAtlas(GI.ATLAS.RACE_BORDER)
 
     -- Glow under icon
     local glow = iconFrame:CreateTexture(nil, "BACKGROUND")

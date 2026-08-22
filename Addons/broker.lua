@@ -17,7 +17,7 @@ if not GI.ldb then return end -- Bazooka (or another LDB display) not installed
 GI.brokerObj = GI.ldb:NewDataObject("GearInventory", {
   type  = "launcher",
   label = "GearInventory",                              -- plain, for display menus
-  text  = "|cFF00C9FFGear|r|cFFFFFFFFInventory|r",      -- shown on the plate
+  text  = GI.NAME_MARKUP,                  -- shown on the plate
   icon  = GI.TEX.ICON,
 
   OnClick = function(_, button)

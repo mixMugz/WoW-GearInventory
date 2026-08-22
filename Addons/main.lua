@@ -12,16 +12,6 @@ function GI.ClassRGB(classToken)
   return c and c.r or 1, c and c.g or 1, c and c.b or 1
 end
 
--- Returns an inline |T...|t texture string for a class icon (14×14 px).
--- Uses the shared class-icon atlas texture and CLASS_ICON_TCOORDS coordinates.
-function GI.ClassIconMarkup(classToken)
-  local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classToken]
-  if not coords then return "" end
-  return string.format(
-    "|T" .. GI.TEX.CLASS_ICONS .. ":14:14:0:0:256:256:%d:%d:%d:%d|t",
-    coords[1] * 256, coords[2] * 256, coords[3] * 256, coords[4] * 256)
-end
-
 -- Returns an inline |A:...:14:14|a atlas markup string for a race icon.
 -- UnitSex() values: 1 = unknown, 2 = male, 3 = female.
 -- Strategy:
@@ -125,7 +115,7 @@ end
 -- silence all of them from one place. Output stays on unless explicitly switched
 -- off, which also means it works before the DB is initialised.
 
-local CHAT_PREFIX = "|cFF00C9FFGear|r|cFFFFFFFFInventory|r: "
+local CHAT_PREFIX = GI.NAME_MARKUP .. ": "
 
 local function MessagesEnabled()
   return GI.Config.Get("debugMessages") ~= false
@@ -148,7 +138,7 @@ end
 -- cannot drift apart.
 function GI.BuildLauncherTooltip(tip)
   local L = GI.L
-  tip:AddLine("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
+  tip:AddLine(GI.NAME_MARKUP)
   tip:AddLine(" ")
   tip:AddLine("|cFFFFFFFF" .. L["TIP_CLICK"]       .. "|r " .. L["ACT_TOGGLE_WINDOW"], 1, 0.82, 0)
   tip:AddLine("|cFFFFFFFF" .. L["TIP_RIGHT_CLICK"] .. "|r " .. L["ACT_OPEN_INFO"],     1, 0.82, 0)
@@ -682,7 +672,7 @@ C_Timer.After(0.5, function()
   local _verStr = _base and _build
     and ("|cFFAAAAAA" .. _base .. "|r|cFF888888#" .. _build .. "|r")
     or  ("|cFFAAAAAA" .. _ver .. "|r")
-  GI.PrintRaw("|cFF00C9FFGear|r|cFFFFFFFFInventory|r " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
+  GI.PrintRaw(GI.NAME_MARKUP .. " " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
   GI.PrintRaw("|cFFFFFFFF---------|r")
   GI.PrintRaw("  " .. string.format(_L["CMD_TOGGLE"], _L["ACT_TOGGLE_WINDOW"]))
   GI.PrintRaw("  " .. string.format(_L["CMD_INFO"],   _L["ACT_OPEN_INFO"]))

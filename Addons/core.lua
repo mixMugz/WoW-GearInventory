@@ -6,9 +6,12 @@ local addonName, GI = ...
 -- Populated by Locales/*.lua; falls back to the key itself for missing entries.
 GI.L = setmetatable({}, { __index = function(_, k) return k end })
 
--- ─── Version ───────────────────────────────────────────────/───────────────────
+-- ─── Version ──────────────────────────────────────────────────────────────────
 GI.VERSION = "12.1.0#0006"
-GI.AUTHOR  = "mixMugz (a.k.a. Муади-Ревущийфьорд)"
+
+-- The addon name as it is drawn everywhere: window title, chat prefix, tooltips,
+-- broker plate. One copy so the branding cannot drift between them.
+GI.NAME_MARKUP = "|cFF00C9FFGear|r|cFFFFFFFFInventory|r"
 
 -- ─── Equipment Slots ──────────────────────────────────────────────────────────
 -- name keys resolve via GI.L (populated by Locales/*.lua after this file loads).
@@ -387,20 +390,21 @@ end
 local ADDON_TEX = "Interface\\AddOns\\GearInventory\\Textures\\"
 
 GI.TEX = {
-  ICON          = ADDON_TEX .. "gi_icon",
-  MINIMAP       = ADDON_TEX .. "gi_icon_minimap",
-  LOGO          = ADDON_TEX .. "gi_logo",
+  ICON               = ADDON_TEX .. "gi_icon",
+  MINIMAP            = ADDON_TEX .. "gi_icon_minimap",
+  LOGO               = ADDON_TEX .. "gi_logo",
+
+  -- Upgrade progress bar. Iron is currently unused: the bar runs bronze,
+  -- silver, gold across six ranks, but the art is kept for a shorter track.
   STAR_EMPTY         = ADDON_TEX .. "star_empty_silver",
   STAR_FILLED_IRON   = ADDON_TEX .. "star_filled_iron",
   STAR_FILLED_BRONZE = ADDON_TEX .. "star_filled_bronze",
   STAR_FILLED_SILVER = ADDON_TEX .. "star_filled_silver",
   STAR_FILLED_GOLD   = ADDON_TEX .. "star_filled_gold",
-  PORTRAIT_MASK = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
-  MM_HIGHLIGHT  = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight",
-  MM_BORDER     = "Interface\\Minimap\\MiniMap-TrackingBorder",
-  MM_BG         = "Interface\\Minimap\\UI-Minimap-Background",
-  BTN_STOP      = "Interface\\Buttons\\UI-StopButton",
-  CLASS_ICONS   = "Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES",
+
+  PORTRAIT_MASK      = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
+  MM_HIGHLIGHT       = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight",
+  MM_BG              = "Interface\\Minimap\\UI-Minimap-Background",
 }
 
 GI.ATLAS = {

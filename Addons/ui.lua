@@ -82,9 +82,11 @@ local function FormatAge(ts)
   end
 end
 
-local function ClassDisplayName(token)
-  if not token then return "?" end
-  return token:sub(1, 1) .. token:sub(2):lower()
+-- Localised class name, best source first: the name captured on that character
+-- (correct for their sex), then the load-time table from GetClassInfo for entries
+-- saved before className existed, then the raw token.
+local function ClassDisplayName(ch)
+  return ch.className or GI.CLASS_DISPLAY[ch.class] or ch.class or "?"
 end
 
 -- ─── Sort / Group Helpers ─────────────────────────────────────────────────────
@@ -433,13 +435,13 @@ local function CharList_CharButton(btn, nodeArg)
 
     local raceMask = raceFrame:CreateMaskTexture()
     raceMask:SetAllPoints(raceIcon)
-    raceMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    raceMask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     raceIcon:AddMaskTexture(raceMask)
 
     local raceBorder = raceFrame:CreateTexture(nil, "OVERLAY")
     raceBorder:SetSize(24, 24)
     raceBorder:SetPoint("CENTER")
-    raceBorder:SetAtlas("talents-node-circle-gray")
+    raceBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
 
     btn.raceIcon   = raceIcon
     btn.raceBorder = raceBorder
@@ -639,7 +641,7 @@ local function CreateMainWindow()
   f:Hide()
 
   -- ButtonFrameTemplate provides: f.TitleContainer.TitleText, f.PortraitContainer.portrait, f.CloseButton
-  f.TitleContainer.TitleText:SetText("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
+  f.TitleContainer.TitleText:SetText(GI.NAME_MARKUP)
   f.PortraitContainer:Hide()
   -- Replace portrait corner with standard metal corner
   f.NineSlice.TopLeftCorner:SetAtlas(GI.ATLAS.WINDOW_CORNER_TL, true)
@@ -781,7 +783,7 @@ local function CreateMainWindow()
 
   local cjBgMask = charJumpBtn:CreateMaskTexture()
   cjBgMask:SetAllPoints(cjBg)
-  cjBgMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  cjBgMask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
   cjBg:AddMaskTexture(cjBgMask)
 
   local cjIcon = charJumpBtn:CreateTexture(nil, "ARTWORK")
@@ -791,14 +793,14 @@ local function CreateMainWindow()
 
   local cjMask = charJumpBtn:CreateMaskTexture()
   cjMask:SetAllPoints(cjIcon)
-  cjMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  cjMask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
   cjIcon:AddMaskTexture(cjMask)
 
   -- Border stays fixed; recolored gold on hover via OnEnter/OnLeave
   local cjBorder = charJumpBtn:CreateTexture(nil, "OVERLAY")
   cjBorder:SetSize(26, 26)
   cjBorder:SetPoint("CENTER")
-  cjBorder:SetAtlas("talents-node-circle-gray")
+  cjBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
 
   local cjClassR, cjClassG, cjClassB = 1, 1, 1  -- cached class color for hover restore
 
@@ -1051,7 +1053,7 @@ function GI.ShowCharacterGear(charKey)
   local agePart = "  |cFF888888" .. FormatAge(specBucket and specBucket.lastUpdate) .. "|r"
   w.charInfoFS:SetFormattedText(
     "|cFF%02X%02X%02X%s|r  |cFFFFFFFF\226\128\162 " .. L["CHAR_LEVEL"] .. "|r%s%s",
-    rH, gH, bH, ClassDisplayName(ch.class),
+    rH, gH, bH, ClassDisplayName(ch),
     ch.level or 0, ilvlPart, agePart)
 
   PrefetchTooltipData(specSlots)

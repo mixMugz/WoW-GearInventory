@@ -19,7 +19,7 @@ local function BuildPanel()
 
   local titleFS = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
   titleFS:SetPoint("TOPLEFT", 20, -20)
-  titleFS:SetText("|cFF00C9FFGear|r|cFFFFFFFFInventory|r")
+  titleFS:SetText(GI.NAME_MARKUP)
 
   local logo = panel:CreateTexture(nil, "ARTWORK")
   logo:SetPoint("TOPLEFT", 20, -52)

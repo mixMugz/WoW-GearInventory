@@ -4,6 +4,14 @@
 
 ## v12.1.0 `#0006`
 
+### Audit and Cleanup
+
+- **Class names were never localised.** The character info line built its own display name from the class token, so a Russian client read `Paladin` instead of `Паладин`. It now uses the localised name captured on that character, falling back to `GI.CLASS_DISPLAY` — a table that was built at load time and then read by nothing
+- The addon name markup lived in six places; it is now `GI.NAME_MARKUP` in `core.lua`
+- `GI.TEX.PORTRAIT_MASK` and `GI.ATLAS.RACE_BORDER` were declared and then bypassed by eleven hardcoded copies of the same texture path and atlas name. The constants are now used
+- Removed dead entries: `GI.ClassIconMarkup` and `GI.TEX.CLASS_ICONS`, left behind when the broker lost its character list; `GI.AUTHOR`, which the About page never read; `GI.TEX.MM_BORDER` and `GI.TEX.BTN_STOP`
+- Stale comments brought up to date: the Saved Characters column list gained EXPORT, and CLAUDE.md now records that spec slots are left-aligned rather than centred, why `gear[0]` cannot occur, and what a track entry carries
+
 ### Main Window — Upgrade Track
 
 - Gear rows now read `Wrist :: Hero` followed by a star bar. The track is named instead of being encoded in the stars, and the stars now show progress through it — filled for ranks earned, empty for ranks left
