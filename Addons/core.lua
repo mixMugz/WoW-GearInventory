@@ -394,10 +394,9 @@ GI.TEX = {
   MINIMAP            = ADDON_TEX .. "gi_icon_minimap",
   LOGO               = ADDON_TEX .. "gi_logo",
 
-  -- Upgrade progress bar. Iron is currently unused: the bar runs bronze,
-  -- silver, gold across six ranks, but the art is kept for a shorter track.
+  -- Upgrade progress bar: bronze for the first two ranks, silver for the next
+  -- two, gold for the last two.
   STAR_EMPTY         = ADDON_TEX .. "star_empty_silver",
-  STAR_FILLED_IRON   = ADDON_TEX .. "star_filled_iron",
   STAR_FILLED_BRONZE = ADDON_TEX .. "star_filled_bronze",
   STAR_FILLED_SILVER = ADDON_TEX .. "star_filled_silver",
   STAR_FILLED_GOLD   = ADDON_TEX .. "star_filled_gold",
