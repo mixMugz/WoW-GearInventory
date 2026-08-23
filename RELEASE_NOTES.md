@@ -14,12 +14,17 @@
 
 ### Main Window — Upgrade Track
 
-- Gear rows now read `Wrist :: Hero` followed by a star bar. The track is named instead of being encoded in the stars, and the stars now show progress through it — filled for ranks earned, empty for ranks left
+- Gear rows now read `Wrist :: Hero` followed by a star bar. The track is named instead of being encoded in the stars, and the stars show progress through it — filled for ranks earned, empty for ranks left
 - The star bar spans the track's own length rather than a fixed five, so a track with a different number of ranks scales on its own
 - The name is coloured by track rank, which lines up exactly with item quality — Adventurer white, Veteran green, Champion blue, Hero purple, Myth gold — so it reuses `ITEM_QUALITY_COLORS` rather than a palette of its own
 - Track names are locale keys (`TRACK_*`). The client has no source for them: no global string holds one and they only arrive inside the tooltip line, which would leave a track unnamed unless the account owns an item of it
-- `Colorize upgrade track` tints the track name by rank. `Colorize upgrade rank` tints the filled stars by progress instead — bronze for the first two ranks, silver for the next two, gold for the last two; switched off the bar is plain gold. The former was `Colorize upgrade stars` and its stored key changed, so that toggle returns to its default once
+- The old `Colorize upgrade stars` setting became `Upgrade track > Colored`; its stored key changed with it, so that toggle returns to its default once
 - `GI.ParseUpgradeTrack` and `GI.GetSlotUpgrade` now return the whole track entry instead of a four-value tuple, which stops the signature growing as fields are added
+- Upgrade display settings moved into an **Upgrades** submenu in the gear dropdown, alongside Sort by and Group by, split into `Upgrade track` and `Upgrade rank` sections
+- New `Show as stars` toggle: off, the rank reads `3/6` instead of the star bar, coloured by item quality shifted one step — 1/6 poor grey through 6/6 legendary. `ITEM_QUALITY_COLORS` is zero-indexed, so rank maps onto it directly
+- The star bar is drawn as real textures rather than inline markup, so it can be tinted to the same six colours. Inline `|T|t` takes no colour at all; the bar tints the silver art, which is close enough to greyscale that `SetVertexColor` does not muddy the hue
+- Stars sit directly after the label, spaced from it and from each other by one space measured in the label font rather than a guessed pixel gap
+- With colouring off the track name and the rank fall back to yellow, which reads as deliberately plain against the dimmed grey of the line they sit in
 
 ---
 

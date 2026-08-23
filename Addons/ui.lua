@@ -135,6 +135,76 @@ local function GetGroupKey(data, groupBy)
   if groupBy == "armor"   then return GI.CLASS_ARMOR[ch.class] or "Unknown" end
 end
 
+-- Colour used when the track or rank colouring is switched off. Not white: the
+-- slot line is dimmed grey, and yellow reads as "deliberately plain" against it.
+local PLAIN_HEX = "FFD100"
+local PLAIN_R, PLAIN_G, PLAIN_B = 1, 0.82, 0
+
+-- Rank star bar. The silver art is close enough to greyscale to tint cleanly:
+-- SetVertexColor multiplies, so a coloured base would muddy every hue.
+local STAR_SIZE   = 6
+local LEAD_SPACES = 2  -- spaces between the label and the first star
+
+-- Gap between the label and the bar, and between stars: one space in the label
+-- font, so the bar is spaced exactly like the words in front of it. Measured as
+-- the difference between two strings rather than from a lone space, which some
+-- fonts report as zero width. Cached — the font never changes.
+local spaceW
+
+local function SpaceWidth(fs)
+  if not spaceW then
+    local prev = fs:GetText()
+    fs:SetText("i i")
+    local withGap = fs:GetStringWidth()
+    fs:SetText("ii")
+    spaceW = withGap - fs:GetStringWidth()
+    fs:SetText(prev or "")
+  end
+  return spaceW
+end
+
+-- Width the bar claims, reserved on the label so text can never run under it.
+local function RankBarWidth(n, gap)
+  if n <= 0 then return 0 end
+  return LEAD_SPACES * gap + n * STAR_SIZE + (n - 1) * gap
+end
+
+-- Places the bar directly after the label text, which means measuring it — so
+-- this must run after SetText. The offset is clamped to the label's own width:
+-- a long slot and track name truncates rather than pushing the bar off the row.
+-- Pass n = 0 to hide the bar.
+local function LayoutRankStars(row, n, cur, r, g, b)
+  local gap, offset = SpaceWidth(row.slotFS), 0
+  if n > 0 then
+    offset = math.min(row.slotFS:GetStringWidth(), row.slotFS:GetWidth()) + LEAD_SPACES * gap
+  end
+
+  for i = 1, math.max(n, #row.stars) do
+    local star = row.stars[i]
+    if not star and i <= n then
+      star = row.textGroup:CreateTexture(nil, "OVERLAY")
+      star:SetSize(STAR_SIZE, STAR_SIZE)
+      row.stars[i] = star
+    end
+    if star then
+      if i > n then
+        star:Hide()
+      else
+        star:ClearAllPoints()
+        star:SetPoint("LEFT", row.slotFS, "LEFT", offset + (i - 1) * (STAR_SIZE + gap), 0)
+        if i <= cur then
+          star:SetTexture(GI.TEX.STAR_FILLED_SILVER)
+          star:SetVertexColor(r, g, b)
+        else
+          star:SetTexture(GI.TEX.STAR_EMPTY)
+          star:SetVertexColor(1, 1, 1)
+        end
+        star:Show()
+      end
+    end
+  end
+end
+
 -- Group-by radio set, shared by the settings dropdown and the group header
 -- context menu so the option list is defined once.
 -- keepOpen: leave the menu open and refresh it after a pick, as the Sort submenu does.
@@ -342,14 +412,21 @@ local function GetOrCreateGearRow(idx)
   textGroup:SetPoint("TOP", iconBtn, "TOP", 0, 2)
   textGroup:SetPoint("BOTTOM", iconBtn, "BOTTOM", 0, 2)
 
+  row.textGroup = textGroup
+
   local slotFS = textGroup:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   local slotFont, slotSize = slotFS:GetFont()
   slotFS:SetFont(slotFont, slotSize - 1)
   slotFS:SetPoint("BOTTOMLEFT", textGroup, "LEFT", 0, 0)
-  slotFS:SetPoint("RIGHT")
   slotFS:SetJustifyH("LEFT")
+  slotFS:SetWordWrap(false)
   slotFS:SetTextColor(0.65, 0.65, 0.65)
   row.slotFS = slotFS
+
+  -- Rank stars are real textures, not inline markup: only a texture can be
+  -- tinted, and the bar has to match the six quality colours the numeric form
+  -- uses. Grown on demand and reused as rows scroll.
+  row.stars = {}
 
   local nameFS = textGroup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   nameFS:SetPoint("TOPLEFT", textGroup, "LEFT", 0, 0)
@@ -723,6 +800,29 @@ local function CreateMainWindow()
     local groupSub = rootDescription:CreateButton(L["OPT_GROUP_BY"])
     AddGroupByRadios(groupSub, true)
 
+    -- ── Upgrades ──────────────────────────────────────────────────────────────
+    local upSub = rootDescription:CreateButton(L["OPT_UPGRADES"])
+
+    upSub:CreateTitle(L["OPT_UPGRADE_TRACK"])
+    upSub:CreateCheckbox(
+      L["OPT_COLORED"],
+      function() return GI.Config.Get("colorUpgradeTrack") ~= false end,
+      function() GI.Config.Set("colorUpgradeTrack", GI.Config.Get("colorUpgradeTrack") == false) end
+    )
+
+    upSub:CreateSpacer()
+    upSub:CreateTitle(L["OPT_UPGRADE_RANK"])
+    upSub:CreateCheckbox(
+      L["OPT_COLORED"],
+      function() return GI.Config.Get("colorUpgradeRank") ~= false end,
+      function() GI.Config.Set("colorUpgradeRank", GI.Config.Get("colorUpgradeRank") == false) end
+    )
+    upSub:CreateCheckbox(
+      L["OPT_RANK_AS_STARS"],
+      function() return GI.Config.Get("upgradeRankAsStars") ~= false end,
+      function() GI.Config.Set("upgradeRankAsStars", GI.Config.Get("upgradeRankAsStars") == false) end
+    )
+
     rootDescription:CreateSpacer()
 
     -- ── Minimap ───────────────────────────────────────────────────────────────
@@ -731,18 +831,6 @@ local function CreateMainWindow()
       function() return GI.db and GI.db.config and GI.db.config.minimapButton
                      and not GI.db.config.minimapButton.hide end,
       function() GI.ToggleMinimapButton() end
-    )
-
-    -- ── Items ─────────────────────────────────────────────────────────────────
-    rootDescription:CreateCheckbox(
-      L["OPT_COLOR_UPGRADE"],
-      function() return GI.Config.Get("colorUpgradeRank") ~= false end,
-      function() GI.Config.Set("colorUpgradeRank", GI.Config.Get("colorUpgradeRank") == false) end
-    )
-    rootDescription:CreateCheckbox(
-      L["OPT_COLOR_TRACK"],
-      function() return GI.Config.Get("colorUpgradeTrack") ~= false end,
-      function() GI.Config.Set("colorUpgradeTrack", GI.Config.Get("colorUpgradeTrack") == false) end
     )
 
     -- ── Messages ──────────────────────────────────────────────────────────────
@@ -933,7 +1021,8 @@ local function CreateMainWindow()
   GI.mainWindow = f
 
   GI.OnConfigChanged = function(key)
-    if (key == "colorUpgradeRank" or key == "colorUpgradeTrack") and selectedKey then
+    if (key == "colorUpgradeRank" or key == "colorUpgradeTrack"
+        or key == "upgradeRankAsStars") and selectedKey then
       GI.ShowCharacterGear(selectedKey)
     end
   end
@@ -1105,38 +1194,42 @@ function GI.ShowCharacterGear(charKey)
       if up then
         -- Track ranks run 1..5 and line up exactly with item quality: common,
         -- uncommon, rare, epic, legendary. No separate palette needed.
-        local trackText = L[up.key]
+        local trackHex = PLAIN_HEX
         if GI.Config.Get("colorUpgradeTrack") ~= false then
           local tr, tg, tb = QColor(up.rank)
-          trackText = string.format("|cFF%02X%02X%02X%s|r", tr * 255, tg * 255, tb * 255, trackText)
-        else
-          -- Uncoloured still means white: the fontstring itself is dimmed grey.
-          trackText = "|cFFFFFFFF" .. trackText .. "|r"
+          trackHex = string.format("%02X%02X%02X", tr * 255, tg * 255, tb * 255)
         end
+        local trackText = "|cFF" .. trackHex .. L[up.key] .. "|r"
 
-        -- Star bar spans the track's own length, so a track with a different
-        -- number of ranks would scale on its own. Colour follows progress
-        -- through the track, not the track itself: 1-2 bronze, 3-4 silver,
-        -- 5-6 gold. Uncoloured, the whole bar is gold against silver empties.
-        local filledTex = GI.TEX.STAR_FILLED_GOLD
+        -- Rank colour is item quality shifted by one: 1/6 poor grey, 2/6 common
+        -- white, 3/6 uncommon green, 4/6 rare blue, 5/6 epic, 6/6 legendary.
+        local rr, rg, rb = PLAIN_R, PLAIN_G, PLAIN_B
         if GI.Config.Get("colorUpgradeRank") ~= false then
-          if     up.cur <= 2 then filledTex = GI.TEX.STAR_FILLED_BRONZE
-          elseif up.cur <= 4 then filledTex = GI.TEX.STAR_FILLED_SILVER
-          else                    filledTex = GI.TEX.STAR_FILLED_GOLD
-          end
+          rr, rg, rb = QColor(up.cur - 1)
         end
 
-        local filled = "|T" .. filledTex         .. ":10:10|t"
-        local empty  = "|T" .. GI.TEX.STAR_EMPTY .. ":10:10|t"
-        local stars  = {}
-        for i = 1, up.max do
-          stars[i] = (i <= up.cur) and filled or empty
+        -- Bar spans the track's own length, so a track with a different number
+        -- of ranks scales on its own.
+        local asStars   = GI.Config.Get("upgradeRankAsStars") ~= false
+        local starCount = asStars and up.max or 0
+        local rankText  = ""
+        if not asStars then
+          rankText = string.format("  |cFF%02X%02X%02X%d/%d|r",
+            rr * 255, rg * 255, rb * 255, up.cur, up.max)
         end
 
-        -- Separator forced white: the fontstring itself is dimmed grey.
-        row.slotFS:SetText(L[slot.key] .. " |cFFFFFFFF::|r " .. trackText
-          .. "  " .. table.concat(stars, " "))
+        -- Reserve the bar width first, set the text, then place the bar: it
+        -- anchors off the rendered text width, so the order matters.
+        -- Separator forced white — the fontstring itself is dimmed grey.
+        local barW = RankBarWidth(starCount, SpaceWidth(row.slotFS))
+        row.slotFS:SetPoint("RIGHT", row.textGroup, "RIGHT", -barW, 0)
+        row.slotFS:SetText(L[slot.key] .. " |cFFFFFFFF::|r " .. trackText .. rankText)
+        LayoutRankStars(row, starCount, up.cur, rr, rg, rb)
       else
+        -- Rows are recycled between characters, so the bar has to be cleared
+        -- explicitly when the item has no track.
+        LayoutRankStars(row, 0)
+        row.slotFS:SetPoint("RIGHT", row.textGroup, "RIGHT", 0, 0)
         row.slotFS:SetText(L[slot.key])
       end
 
@@ -1150,6 +1243,8 @@ function GI.ShowCharacterGear(charKey)
       row.nameFS:SetText("|cFF3A3A3A" .. L["ITEM_EMPTY"] .. "|r")
       row.nameFS:SetTextColor(1, 1, 1)
       row.ilvlFS:SetText("")
+      LayoutRankStars(row, 0)
+      row.slotFS:SetPoint("RIGHT", row.textGroup, "RIGHT", 0, 0)
       row.slotFS:SetText(L[slot.key])
     end
 

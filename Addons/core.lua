@@ -454,14 +454,15 @@ end
 
 GI.DEFAULTS = {
   config = {
-    dbVersion         = "v1",  -- incremented on breaking schema changes
-    sortOrder         = "ilvl", -- "name" | "class" | "level" | "ilvl"
-    secondarySort     = "none", -- "none" | "name" | "class" | "level" | "ilvl" | "lastUpdated"
-    sortDir           = "desc", -- "asc" | "desc"
-    groupBy           = "none", -- "none" | "realm" | "faction" | "armor"
-colorUpgradeRank  = true,   -- colorize upgrade progress (1/6) by step
-    colorUpgradeTrack = true,   -- colorize the upgrade track name by its rank
-    debugMessages     = true,   -- chat output; false silences every addon message
+    dbVersion          = "v1",   -- incremented on breaking schema changes
+    sortOrder          = "ilvl", -- "name" | "class" | "level" | "ilvl"
+    secondarySort      = "none", -- "none" | "name" | "class" | "level" | "ilvl" | "lastUpdated"
+    sortDir            = "desc", -- "asc" | "desc"
+    groupBy            = "none", -- "none" | "realm" | "faction" | "armor"
+    colorUpgradeTrack  = true,   -- colorize the upgrade track name by its rank
+    colorUpgradeRank   = true,   -- colorize the rank bar or text by progress tier
+    upgradeRankAsStars = true,   -- rank as a star bar; false shows "3/6" instead
+    debugMessages      = true,   -- chat output; false silences every addon message
     minimapButton = {
       hide  = false,
       angle = 220, -- fallback angle when LibDBIcon is absent
