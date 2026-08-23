@@ -3,7 +3,11 @@
 --   A) LibDBIcon-1.0 (bundled by SexyMap) — fully managed: positioning, styling,
 --      saved angle, show/hide state all handled by the library.
 --   B) Manual fallback — draggable button created directly on Minimap frame,
---      angle persisted in GearInventoryDB.config.minimapButton.angle.
+--      angle persisted in GearInventoryDB.config.minimapButton.minimapPos.
+--
+-- Both paths persist the angle under the same key, so installing or removing a
+-- LibDBIcon host keeps the button where the user left it. The positioning math
+-- below is LibDBIcon's, kept identical for the same reason.
 --
 -- Depends on: GI.dbicon (Addons/libs.lua), GI.brokerObj (Addons/broker.lua, may be nil),
 --             GI.ToggleMainWindow (Addons/ui.lua)
@@ -12,6 +16,10 @@ local addonName, GI = ...
 local L = GI.L
 
 local ICON = GI.TEX.MINIMAP
+
+-- Fallback for the manual path only; the real default lives in GI.DEFAULTS
+-- and is written by GI.ApplyDefaults before either setup path runs.
+local DEFAULT_ANGLE = GI.DEFAULTS.config.minimapButton.minimapPos
 
 -- Minimap shape → per-quadrant flag: true = circular arc, false = straight edge.
 -- Quadrant order: [1]=right-bottom, [2]=left-bottom, [3]=right-top, [4]=left-top
@@ -48,6 +56,39 @@ local function HideMMTooltip()
   GameTooltip:Hide()
 end
 
+-- ─── SexyMap Interop ──────────────────────────────────────────────────────────
+-- SexyMap claims drag ownership of every LibDBIcon button (its "Let SexyMap
+-- handle button dragging" option): it replaces the library's OnDragStart and
+-- stores the angle in SexyMap2DB. LibDBIcon's own minimapPos is therefore never
+-- updated, and lib:Show() reapplies it -- snapping the button to the library
+-- default of 225 degrees.
+--
+-- Reading the angle back keeps our copy authoritative, so a hide/show cycle
+-- restores where the button actually sits, and the position survives SexyMap
+-- being uninstalled. Both stores measure the same angle from the minimap centre.
+--
+-- Every step is guarded: should SexyMap change its layout this quietly does
+-- nothing, leaving the previously stored angle in place.
+local function SyncPosFromSexyMap()
+  if type(SexyMap2DB) ~= "table" then return end
+
+  local btn  = GI.dbicon and GI.dbicon:GetMinimapButton("GearInventory")
+  local name = btn and btn:GetName()
+  if not name then return end
+
+  -- SexyMap keys profiles by "Name-Realm", or stores the string "global" there
+  -- to redirect to the shared profile.
+  local profile = SexyMap2DB[GI.PlayerKey() or ""]
+  if type(profile) == "string" then profile = SexyMap2DB.global end
+  if type(profile) ~= "table" or type(profile.buttons) ~= "table" then return end
+
+  local saved = profile.buttons.dragPositions
+  local pos   = type(saved) == "table" and saved[name] or nil
+  if type(pos) == "number" then
+    GI.db.config.minimapButton.minimapPos = pos % 360
+  end
+end
+
 -- ─── Path A: LibDBIcon ────────────────────────────────────────────────────────
 -- LibDBIcon-1.0 may be bundled by SexyMap, HandyNotes, or other addons.
 -- When present it handles button placement, shape masking, and hide/show state.
@@ -66,6 +107,8 @@ local function SetupLibDBIcon()
 
   GI.minimapIconID = "GearInventory"
 
+  SyncPosFromSexyMap()
+
   -- Replace LibDBIcon tooltip with simplified version (no character list)
   local mmBtn = GI.dbicon:GetMinimapButton("GearInventory")
   if mmBtn then
@@ -83,7 +126,8 @@ end
 -- ─── Path B: Manual Fallback ──────────────────────────────────────────────────
 
 local function SetupManual()
-  GI.db.config.minimapButton = GI.db.config.minimapButton or { hide = false, angle = 220 }
+  GI.db.config.minimapButton = GI.db.config.minimapButton
+    or { hide = false, minimapPos = DEFAULT_ANGLE }
 
   local btn = CreateFrame("Button", "GearInventoryMinimapButton", Minimap)
   btn:SetSize(31, 31)
@@ -106,7 +150,7 @@ local function SetupManual()
 
   -- Shape-aware positioning around the minimap ring
   local function UpdatePos()
-    local rad   = math.rad(GI.db.config.minimapButton.angle or 220)
+    local rad   = math.rad(GI.db.config.minimapButton.minimapPos or DEFAULT_ANGLE)
     local x, y  = math.cos(rad), math.sin(rad)
     local q     = 1
     if x < 0 then q = q + 1 end
@@ -142,7 +186,7 @@ local function SetupManual()
       local mx, my = Minimap:GetCenter()
       local s      = Minimap:GetEffectiveScale()
       local cx, cy = GetCursorPosition()
-      GI.db.config.minimapButton.angle = math.deg(math.atan2(cy / s - my, cx / s - mx)) % 360
+      GI.db.config.minimapButton.minimapPos = math.deg(math.atan2(cy / s - my, cx / s - mx)) % 360
       UpdatePos()
     end)
   end)
@@ -174,6 +218,10 @@ end
 function GI.ToggleMinimapButton()
   if not GI.db or not GI.db.config or not GI.db.config.minimapButton then return end
 
+  -- Before the branch, so the angle is captured whichever way the toggle goes:
+  -- on hide it is banked for the next login, on show it feeds LibDBIcon.
+  SyncPosFromSexyMap()
+
   local nowHidden = not GI.db.config.minimapButton.hide
   GI.db.config.minimapButton.hide = nowHidden
 
@@ -196,9 +244,9 @@ end
 local minimapFrame = CreateFrame("Frame")
 minimapFrame:RegisterEvent("PLAYER_LOGIN")
 minimapFrame:SetScript("OnEvent", function(self)
-  if GI.dbicon then
-    SetupLibDBIcon()
-  else
+  -- SetupLibDBIcon bails out when there is no broker object to register, so its
+  -- return value decides whether the manual button is still needed.
+  if not (GI.dbicon and SetupLibDBIcon()) then
     SetupManual()
   end
   self:UnregisterEvent("PLAYER_LOGIN")

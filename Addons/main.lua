@@ -15,14 +15,14 @@ end
 -- Returns an inline |A:...:14:14|a atlas markup string for a race icon.
 -- UnitSex() values: 1 = unknown, 2 = male, 3 = female.
 -- Strategy:
---   1. GetRaceAtlas(raceFile, sex) — engine-provided atlas name.
+--   1. GetRaceAtlas(race, sex) — engine-provided atlas name.
 --   2. Manual fallback — try several known atlas prefixes with C_Texture
 --      validation: raceicon128-, raceicon64-, raceicon-.
---   3. Cache results per raceFile+sex combo.
+--   3. Cache results per race+sex combo.
 
 local raceIconCache = {}
 
--- raceFile (from UnitRace) → atlas token override.
+-- race (from UnitRace) → atlas token override.
 -- Used when the race file name does not match the texture atlas token.
 local RACE_ATLAS_TOKEN = {
   ["harronir"]           = "haranir",
@@ -34,17 +34,17 @@ local RACE_ATLAS_TOKEN = {
 }
 
 -- Returns the atlas name for a race icon, or nil if unavailable.
--- Caches results per raceFile+sex combo.
-function GI.RaceAtlas(raceFile, sex)
-  if not raceFile then return nil end
+-- Caches results per race+sex combo.
+function GI.RaceAtlas(race, sex)
+  if not race then return nil end
 
-  local cacheKey = raceFile .. (sex or 2)
+  local cacheKey = race .. (sex or 2)
   if raceIconCache[cacheKey] ~= nil then
     return raceIconCache[cacheKey] ~= "" and raceIconCache[cacheKey] or nil
   end
 
   local sexStr   = (sex == 3) and "female" or "male"
-  local atlasToken = RACE_ATLAS_TOKEN[raceFile:lower()] or raceFile:lower()
+  local atlasToken = RACE_ATLAS_TOKEN[race:lower()] or race:lower()
 
   local function ValidAtlas(name)
     return name and C_Texture and C_Texture.GetAtlasInfo
@@ -52,7 +52,7 @@ function GI.RaceAtlas(raceFile, sex)
   end
 
   -- 1. Engine-provided atlas (validated)
-  local atlas = GetRaceAtlas and ValidAtlas(GetRaceAtlas(raceFile, sex or 2))
+  local atlas = GetRaceAtlas and ValidAtlas(GetRaceAtlas(race, sex or 2))
 
   -- 2. Manual fallback: try known atlas prefix patterns (validated)
   if not atlas then
@@ -81,8 +81,8 @@ function GI.RaceAtlas(raceFile, sex)
   return atlas
 end
 
-function GI.RaceIconMarkup(raceFile, sex, size)
-  local atlas = GI.RaceAtlas(raceFile, sex)
+function GI.RaceIconMarkup(race, sex, size)
+  local atlas = GI.RaceAtlas(race, sex)
   if not atlas then return "" end
   size = size or 14
   return "|A:" .. atlas .. ":" .. size .. ":" .. size .. "|a "
@@ -225,10 +225,10 @@ local function ScanCharacterGear(isLoginScan)
   local charName          = UnitName("player")
   local realm             = GetRealmName()
   local key               = charName .. "-" .. realm
-  local className, class  = UnitClass("player")
-  local raceName, raceFile = UnitRace("player")
+  local _, class          = UnitClass("player")
+  local _, race           = UnitRace("player")
   local sex               = UnitSex("player")
-  local faction, factionName = UnitFactionGroup("player")
+  local faction           = UnitFactionGroup("player")
   local specIndex         = C_SpecializationInfo.GetSpecialization()
   local specID            = specIndex
                             and select(1, C_SpecializationInfo.GetSpecializationInfo(specIndex))
@@ -243,12 +243,9 @@ local function ScanCharacterGear(isLoginScan)
         name        = charName,
         realm       = realm,
         class       = class,
-        className   = className,
-        raceFile    = raceFile,
-        raceName    = raceName,
+        race        = race,
         sex         = sex,
         faction     = faction,
-        factionName = factionName,
         specID      = specID,
         level       = 0,
       },
@@ -260,12 +257,9 @@ local function ScanCharacterGear(isLoginScan)
   d.character.name        = charName
   d.character.realm       = realm
   d.character.class       = class
-  d.character.className   = className
-  d.character.raceFile    = raceFile
-  d.character.raceName    = raceName
+  d.character.race        = race
   d.character.sex         = sex
   d.character.faction     = faction
-  d.character.factionName = factionName
   d.character.specID      = specID
   d.character.level       = UnitLevel("player")
 
@@ -347,7 +341,6 @@ local function ScanCharacterGear(isLoginScan)
         specSlots[skey] = {
           id      = itemID,
           link    = itemLink,
-          name    = name,
           ilvl    = effectiveIlvl,
           quality = finalQ,
           icon    = C_Item.GetItemIconByID(itemID),
@@ -364,7 +357,6 @@ local function ScanCharacterGear(isLoginScan)
         specSlots[skey] = {
           id      = itemID,
           link    = itemLink,
-          name    = L["ITEM_LOADING"],
           ilvl    = (specSlots[skey] and specSlots[skey].ilvl) or 0,
           quality = (specSlots[skey] and specSlots[skey].quality) or 1,
           icon    = C_Item.GetItemIconByID(itemID),
@@ -482,7 +474,7 @@ function GI.ConfirmDeleteCharacter(charKey)
   local r, g, b = GI.ClassRGB(ch.class)
   local displayName = (ch.name or "?") .. "-" .. (ch.realm or "?")
   local coloredName = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, displayName)
-  local raceMarkup  = GI.RaceIconMarkup(ch.raceFile, ch.sex)
+  local raceMarkup  = GI.RaceIconMarkup(ch.race, ch.sex)
   local popup = StaticPopup_Show("GEARINVENTORY_DELETE_CHAR", coloredName)
   if popup then
     popup.data = { charKey = charKey, coloredName = coloredName, raceMarkup = raceMarkup }
@@ -605,7 +597,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
               end
             end
 
-            slot.name    = name
             slot.link    = resolvedLink
             slot.quality = math.max(quality or 0, slot.quality or 0)
             if slot.quality == 0 then slot.quality = 1 end
@@ -669,9 +660,12 @@ local _L = GI.L
 C_Timer.After(0.5, function()
   local _ver = GI.VERSION or ""
   local _base, _build = _ver:match("^(.-)#(.+)$")
-  local _verStr = _base and _build
-    and ("|cFFAAAAAA" .. _base .. "|r|cFF888888#" .. _build .. "|r")
-    or  ("|cFFAAAAAA" .. _ver .. "|r")
+  local _verStr
+  if _base and _build then
+    _verStr = "|cFFFFD100" .. _base .. "|r|cFFFFFFFF#|r|cFF888888" .. _build .. "|r"
+  else
+    _verStr = "|cFFFFD100" .. _ver .. "|r"
+  end
   GI.PrintRaw(GI.NAME_MARKUP .. " " .. _verStr .. " |cFFFFFFFF" .. _L["LOADED_MSG"] .. "|r")
   GI.PrintRaw("|cFFFFFFFF---------|r")
   GI.PrintRaw("  " .. string.format(_L["CMD_TOGGLE"], _L["ACT_TOGGLE_WINDOW"]))

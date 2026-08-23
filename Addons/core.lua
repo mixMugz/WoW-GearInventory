@@ -36,11 +36,18 @@ GI.GEAR_SLOTS = {
 
 -- ─── Class Colors & Display Names ────────────────────────────────────────────
 -- Colors: WoW's built-in RAID_CLASS_COLORS — always up to date with new classes.
--- Display names: built at load time via GetClassInfo — localised automatically.
-GI.CLASS_DISPLAY = {}
-for i = 1, GetNumClasses() do
-  local name, file = GetClassInfo(i)
-  if file then GI.CLASS_DISPLAY[file] = name end
+
+-- Localised class name for a class token, in the gendered form the client uses
+-- for that character. Blizzard fills both tables before addons load.
+--
+-- Derived rather than stored: a saved name would freeze the language of whoever
+-- scanned the character, so an imported base would show its exporter's client.
+-- UnitSex returns 3 for female, 2 for male, 1 for unknown.
+function GI.ClassDisplayName(class, sex)
+  if not class then return "?" end
+  local names = LOCALIZED_CLASS_NAMES_MALE
+  if sex == 3 then names = LOCALIZED_CLASS_NAMES_FEMALE end
+  return (names and names[class]) or class
 end
 
 -- ─── Class Armor Types ───────────────────────────────────────────────────────
@@ -386,6 +393,23 @@ function GI.GetSlotUpgrade(slot)
   return GI.ParseUpgradeTrack(slot.link)
 end
 
+-- ─── Saved Character Schema ──────────────────────────────────────────────────
+-- The fields a saved character actually consists of, listed so import can be
+-- told what to keep. An export string produced by an older build still carries
+-- whatever that build stored, and copying it in verbatim would resurrect fields
+-- since dropped from the schema -- or leave a renamed one under its old name,
+-- which is worse than junk: nothing reads it and the display breaks.
+--
+-- Keep these in step with what ScanCharacterGear writes. A field missing here
+-- is silently dropped on import.
+GI.DB_FIELDS = {
+  character = { "name", "realm", "class", "race", "sex", "faction", "specID", "level" },
+  -- avgIlvlColor is a nested { r, g, b } and is handled separately;
+  -- slots is the table below.
+  spec      = { "incRecommend", "avgIlvl", "lastUpdate" },
+  slot      = { "id", "link", "ilvl", "quality", "icon", "expac", "cached" },
+}
+
 -- ─── Textures & Atlases ───────────────────────────────────────────────────────
 local ADDON_TEX = "Interface\\AddOns\\GearInventory\\Textures\\"
 
@@ -464,8 +488,11 @@ GI.DEFAULTS = {
     upgradeRankAsStars = true,   -- rank as a star bar; false shows "3/6" instead
     debugMessages      = true,   -- chat output; false silences every addon message
     minimapButton = {
-      hide  = false,
-      angle = 220, -- fallback angle when LibDBIcon is absent
+      hide       = false,
+      -- Angle in degrees around the minimap ring. Named after LibDBIcon's own
+      -- field: the library is handed this very table and writes the key itself,
+      -- so both setup paths share one value instead of drifting apart.
+      minimapPos = 210,
     },
   },
 }

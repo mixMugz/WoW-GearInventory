@@ -4,12 +4,35 @@
 
 ## v12.1.0 `#0006`
 
+### Import
+
+- **Import no longer stores whatever the export string happened to contain.** Every character is rebuilt from the field lists in `GI.DB_FIELDS`, so a string written by an older build cannot put back a field the schema has dropped — or leave a renamed one under its old name, which broke the race icon until that character was logged into
+- No v1 to v2 conversion goes with it: while the addon is unreleased the schema is still free to move, so an unknown field is discarded rather than translated. That conversion belongs here once the format is frozen
+- **Importing no longer drops the character you are playing.** It used to skip them outright to protect live data, which meant their other specs — present only in the import — were lost. The active spec is still kept from the running game, but every other spec is merged in
+- That was the likely cause of specs and gear seeming to vanish after an export, a wipe and an import: the wipe rescanned only the active spec, and the import then refused to restore the rest
+- Merged characters are counted and reported separately, in yellow: `23 imported, 1 overwritten, 1 merged, 1 skipped.`
+- The result line is assembled from fragments and lists only non-zero counts, instead of keeping one format string per combination of them
+- Per-character write logic pulled out of the two near-identical branches in `GI.ApplyImport` into one function that reports `new` / `replaced` / `merged` / `skipped`
+
 ### Audit and Cleanup
 
 - **Class names were never localised.** The character info line built its own display name from the class token, so a Russian client read `Paladin` instead of `Паладин`. It now uses the localised name captured on that character, falling back to `GI.CLASS_DISPLAY` — a table that was built at load time and then read by nothing
 - The addon name markup lived in six places; it is now `GI.NAME_MARKUP` in `core.lua`
 - `GI.TEX.PORTRAIT_MASK` and `GI.ATLAS.RACE_BORDER` were declared and then bypassed by eleven hardcoded copies of the same texture path and atlas name. The constants are now used
 - Removed dead entries: `GI.ClassIconMarkup` and `GI.TEX.CLASS_ICONS`, left behind when the broker lost its character list; `GI.AUTHOR`, which the About page never read; `GI.TEX.MM_BORDER` and `GI.TEX.BTN_STOP`; and the iron star, unused since the progress bar settled on bronze, silver and gold
+- **Item names are no longer stored, only resolved.** A saved name is in the language of whoever scanned the item, so a character exported from a Russian client and imported into a Spanish or English one showed Cyrillic in every gear row — and those clients' fonts have no Cyrillic glyphs, so it rendered as boxes rather than as text somebody could at least read
+- The stored name did eventually correct itself, because the login warm-up re-resolves every saved slot through the local client — but only after it completed, and never for an item the client cannot resolve at all. The row now asks the client directly and shows `Loading...` until it answers, which is what the warm-up was already there to fix
+- Item links keep their embedded name, but nothing displays it: tooltips are built by `C_TooltipInfo.GetHyperlink` from the item ID, in the viewer's own language. Deriving the row label from the link would have been worse than storing it — a stored link is never replaced once written, so the original scanner's language would have stuck permanently
+- **Pre-translated names dropped from the database.** `raceName`, `factionName` and `className` all stored text already translated into the scanning client's language. `raceName` had no readers at all — the race is only ever drawn as an icon. The other two are now derived at display time from `FACTION_LABELS_FROM_STRING` and `LOCALIZED_CLASS_NAMES_MALE` / `_FEMALE`
+- That also fixes imported characters: a stored name freezes the exporter's client, so a base from an English client showed `Horde` and `Shaman` next to translated rows. The globals resolve in the language of whoever is looking, and the class name still picks the gendered form from the saved sex
+- `GI.CLASS_DISPLAY` went with them. It was built from `GetClassInfo`, which only ever returns the masculine form, so it could not have been the primary source anyway
+- `raceFile` renamed to `race`: it holds the same kind of value as `class` and now reads like it
+- The login line now colours the version yellow and the `#` white, so the build number reads as a separate part rather than a suffix on a grey string
+- **No minimap button at all when a LibDBIcon host was installed without LibDataBroker.** `SetupLibDBIcon` reports failure by returning false, but the caller discarded it and never fell back to the manual button. The return value is now what decides
+- **The minimap button jumped to a default position after being hidden and shown again.** SexyMap claims drag ownership of every LibDBIcon button and stores the angle in its own saved variables, so LibDBIcon's `minimapPos` never learned about the move and `:Show()` reapplied the library default. The stored angle is now read back from SexyMap before the toggle acts, in both directions — so hiding banks the real position and showing restores it
+- That also means the position survives SexyMap being uninstalled, since our own copy is kept current. Every step of the lookup is guarded; if SexyMap changes its layout the sync quietly does nothing rather than breaking the button
+- **The minimap button's saved angle was written under two different names.** The manual fallback used `angle`; LibDBIcon, handed the same config table, writes `minimapPos` and never looked at ours. Both now use `minimapPos`, so the button keeps its place when a LibDBIcon host is installed or removed. The positioning math was already identical — the fallback is a copy of the library's
+- Default angle moved to 210 degrees, and the manual path now reads it from `GI.DEFAULTS` rather than carrying its own copy of the number
 - Stale comments brought up to date: the Saved Characters column list gained EXPORT, and CLAUDE.md now records that spec slots are left-aligned rather than centred, why `gear[0]` cannot occur, and what a track entry carries
 
 ### Main Window — Upgrade Track

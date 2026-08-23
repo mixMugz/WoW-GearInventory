@@ -406,7 +406,7 @@ local function BuildCharPanel()
       row.sep4:SetPoint("BOTTOM", row, "BOTTOMRIGHT", -cDW, 0)
 
       -- CHARACTERS column
-      local raceAtlas = GI.RaceAtlas(ch.raceFile, ch.sex)
+      local raceAtlas = GI.RaceAtlas(ch.race, ch.sex)
       if raceAtlas then row.raceIcon:SetAtlas(raceAtlas) row.raceIcon:Show()
       else row.raceIcon:Hide() end
       row.raceBorder:SetVertexColor(r, g, b)
@@ -643,7 +643,7 @@ local function ShowDeletePicker(anchorBtn, charKey)
   local displayName = (ch.name or "?") .. "-" .. (ch.realm or "?")
   local r, g, b     = GI.ClassRGB(ch.class)
   local coloredName = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, displayName)
-  local raceMarkup  = GI.RaceIconMarkup(ch.raceFile, ch.sex)
+  local raceMarkup  = GI.RaceIconMarkup(ch.race, ch.sex)
   local classColor  = string.format("|cFF%02X%02X%02X%%s|r", r*255, g*255, b*255)
 
   -- 0 or 1 spec — go straight to "Are you sure?" without the picker
@@ -695,7 +695,7 @@ local function ShowDeletePicker(anchorBtn, charKey)
             specID      = spec.specID,
             specName    = spec.name,
             specIcon    = spec.icon,
-            raceFile    = ch2.raceFile,
+            race        = ch2.race,
             sex         = ch2.sex,
             coloredName = cName,
             coloredSpec = coloredSpec,
@@ -749,7 +749,7 @@ StaticPopupDialogs["GEARINVENTORY_DELETE_SPEC"] = {
 
     GI.RefreshCharacterList()
     if GI.RefreshOptionsCharList then GI.RefreshOptionsCharList() end
-    local raceMarkup = GI.RaceIconMarkup(self.data.raceFile, self.data.sex)
+    local raceMarkup = GI.RaceIconMarkup(self.data.race, self.data.sex)
     local iconMarkup = specIcon and ("|T" .. specIcon .. ":14:14|t ") or ""
     GI.Print(string.format(L["SPEC_REMOVED"],
       iconMarkup .. (self.data.coloredSpec or ("|cFFFF4444" .. (specName or "?") .. "|r")),

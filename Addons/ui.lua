@@ -82,13 +82,6 @@ local function FormatAge(ts)
   end
 end
 
--- Localised class name, best source first: the name captured on that character
--- (correct for their sex), then the load-time table from GetClassInfo for entries
--- saved before className existed, then the raw token.
-local function ClassDisplayName(ch)
-  return ch.className or GI.CLASS_DISPLAY[ch.class] or ch.class or "?"
-end
-
 -- ─── Sort / Group Helpers ─────────────────────────────────────────────────────
 
 local function GetAvgIlvl(data)
@@ -131,7 +124,11 @@ end
 local function GetGroupKey(data, groupBy)
   local ch = data.character or {}
   if groupBy == "realm"   then return ch.realm or "Unknown" end
-  if groupBy == "faction" then return ch.factionName or ch.faction or "Unknown" end
+  -- FACTION_LABELS_FROM_STRING localizes into the *viewer's* client language,
+  -- so an imported character keeps a matching header instead of the exporter's.
+  if groupBy == "faction" then
+    return FACTION_LABELS_FROM_STRING[ch.faction] or ch.faction or "Unknown"
+  end
   if groupBy == "armor"   then return GI.CLASS_ARMOR[ch.class] or "Unknown" end
 end
 
@@ -625,7 +622,7 @@ local function CharList_CharButton(btn, nodeArg)
                     specID      = sid,
                     specName    = sName,
                     specIcon    = sIcon,
-                    raceFile    = ch.raceFile,
+                    race        = ch.race,
                     sex         = ch.sex,
                     coloredName = coloredName,
                     coloredSpec = coloredSpec,
@@ -673,7 +670,7 @@ local function CharList_CharButton(btn, nodeArg)
     btn.ilvlFS:SetText("|cFF666666?|r")
   end
 
-  local raceAtlas = GI.RaceAtlas(ch.raceFile, ch.sex)
+  local raceAtlas = GI.RaceAtlas(ch.race, ch.sex)
   if raceAtlas then
     btn.raceIcon:SetAtlas(raceAtlas)
     btn.raceIcon:Show()
@@ -899,7 +896,7 @@ local function CreateMainWindow()
     local ch  = d and d.character
     if not ch then charJumpBtn:Hide() return end
     cjClassR, cjClassG, cjClassB = GI.ClassRGB(ch.class)
-    local atlas = GI.RaceAtlas(ch.raceFile, ch.sex)
+    local atlas = GI.RaceAtlas(ch.race, ch.sex)
     if atlas then
       cjIcon:SetAtlas(atlas)
       cjIcon:Show()
@@ -1117,7 +1114,7 @@ function GI.ShowCharacterGear(charKey)
   if ch.realm and ch.realm ~= playerRealm then
     realmSuffix = "|cFF666666-" .. ch.realm .. "|r"
   end
-  local raceMarkup = GI.RaceIconMarkup(ch.raceFile, ch.sex, 16)
+  local raceMarkup = GI.RaceIconMarkup(ch.race, ch.sex, 16)
   w.charNameFS:SetFormattedText(
     "%s|cFF%02X%02X%02X%s|r%s",
     raceMarkup, rH, gH, bH, ch.name or "?", realmSuffix)
@@ -1142,7 +1139,7 @@ function GI.ShowCharacterGear(charKey)
   local agePart = "  |cFF888888" .. FormatAge(specBucket and specBucket.lastUpdate) .. "|r"
   w.charInfoFS:SetFormattedText(
     "|cFF%02X%02X%02X%s|r  |cFFFFFFFF\226\128\162 " .. L["CHAR_LEVEL"] .. "|r%s%s",
-    rH, gH, bH, ClassDisplayName(ch),
+    rH, gH, bH, GI.ClassDisplayName(ch.class, ch.sex),
     ch.level or 0, ilvlPart, agePart)
 
   PrefetchTooltipData(specSlots)
@@ -1164,7 +1161,11 @@ function GI.ShowCharacterGear(charKey)
 
       local qr, qg, qb = QColor(item.quality or 1)
 
-      row.nameFS:SetText(item.name or "?")
+      -- Resolved from the client rather than stored: a saved name would be in
+      -- the language of whoever scanned the item, and an imported character
+      -- would show it verbatim -- unreadable in a client whose font has no
+      -- glyphs for that script.
+      row.nameFS:SetText(C_Item.GetItemInfo(item.link or item.id) or L["ITEM_LOADING"])
       if item.cached == false then
         row.nameFS:SetTextColor(0.5, 0.5, 0.5)
       else
@@ -1345,7 +1346,7 @@ local function CharImportMarkup(charKey)
   local ch = d and d.character
   if not ch then return "|cFFFFFFFF" .. charKey .. "|r" end
   local r, g, b     = GI.ClassRGB(ch.class)
-  local raceIcon    = GI.RaceIconMarkup(ch.raceFile, ch.sex)
+  local raceIcon    = GI.RaceIconMarkup(ch.race, ch.sex)
   local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
   return raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
 end
@@ -1375,22 +1376,33 @@ end
 
 -- Writes parsed import data and reports the outcome in chat.
 -- Used by both import paths — the plain one and the overwrite confirmation — so
--- that neither can drift in how it reads GI.ApplyImport's five return values.
+-- that neither can drift in how it reads what GI.ApplyImport returns.
 local function ApplyImportAndPrint(importType, importData, skipExisting)
-  local count, overwritten, skipped, charKey, writtenKeys = GI.ApplyImport(importType, importData, skipExisting)
+  local count, overwritten, merged, skipped, charKey, writtenKeys =
+    GI.ApplyImport(importType, importData, skipExisting)
+
   if importType == "char" then
-    if count == 0 and overwritten == 0 then
+    if count == 0 and overwritten == 0 and merged == 0 then
       GI.Print(L["IMPORT_SKIP_CURRENT"])
     else
       GI.Print(string.format(L["IMPORT_OK_CHAR"], CharImportMarkup(charKey)))
     end
   else
+    -- Assembled from fragments: only non-zero counts are listed, and "imported"
+    -- always is, so an import that wrote nothing still says so.
+    local parts = { string.format(L["IMPORT_N_IMPORTED"], count) }
     if overwritten > 0 then
-      GI.Print(string.format(L["IMPORT_OK_FULL_OW"], count, overwritten, skipped))
-    else
-      GI.Print(string.format(L["IMPORT_OK_FULL"], count, skipped))
+      parts[#parts + 1] = string.format(L["IMPORT_N_OVERWRITTEN"], overwritten)
     end
+    if merged > 0 then
+      parts[#parts + 1] = string.format(L["IMPORT_N_MERGED"], merged)
+    end
+    if skipped > 0 then
+      parts[#parts + 1] = string.format(L["IMPORT_N_SKIPPED"], skipped)
+    end
+    GI.Print(table.concat(parts, ", ") .. ".")
   end
+
   if writtenKeys and #writtenKeys > 0 and GI.WarmUpAllCharacters then
     GI.WarmUpAllCharacters()
   end

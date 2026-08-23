@@ -140,39 +140,120 @@ function GI.ParseImport(str)
   return isChar and "char" or "full", decoded, conflicts
 end
 
--- Writes parsed import data into the DB. Call only after any needed confirmation.
--- The current player's character is always skipped — live data must not be overwritten.
--- skipExisting: if true, characters already in DB are skipped instead of overwritten.
--- Returns: count (imported new), overwritten (replaced existing), skipped (skipped due to current player or existing), charKey (single-char only), writtenKeys (list of all written charKeys)
-function GI.ApplyImport(importType, data, skipExisting)
-  if not GI.db or not GI.db.characters then return 0, 0, 0 end
-  local myKey = GI.PlayerKey()
-  local count, overwritten, skipped = 0, 0, 0
-  local writtenKeys = {}
-  if importType == "char" then
-    local key = data.key
-    if key == myKey then
-      skipped = 1
-    elseif skipExisting and GI.db.characters[key] then
-      skipped = 1
-    elseif key and data.data then
-      if GI.db.characters[key] then overwritten = 1 else count = 1 end
-      GI.db.characters[key] = data.data
-      writtenKeys[#writtenKeys + 1] = key
-    end
-  else
-    for charKey, charData in pairs(data) do
-      if charKey == myKey then
-        skipped = skipped + 1
-      elseif skipExisting and GI.db.characters[charKey] then
-        skipped = skipped + 1
-      else
-        if GI.db.characters[charKey] then overwritten = overwritten + 1 else count = count + 1 end
-        GI.db.characters[charKey] = charData
-        writtenKeys[#writtenKeys + 1] = charKey
+-- Rebuilds one character from GI.DB_FIELDS instead of storing the decoded table
+-- as it arrived. Anything the current schema does not name is dropped, so an
+-- export written by an older build cannot put a removed field back into the DB.
+--
+-- The addon is not public yet, so the schema is still free to move and there is
+-- deliberately no v1 -> v2 conversion here: an old field is discarded, not
+-- translated. Once the format is frozen this is where that conversion would go.
+local function Pick(src, fields)
+  local out = {}
+  for i = 1, #fields do
+    local key = fields[i]
+    out[key] = src[key]
+  end
+  return out
+end
+
+local function SanitizeCharacter(charData)
+  local clean = {
+    character = Pick(charData.character or {}, GI.DB_FIELDS.character),
+    gear      = {},
+  }
+
+  for specID, bucket in pairs(charData.gear or {}) do
+    if type(bucket) == "table" then
+      local outBucket = Pick(bucket, GI.DB_FIELDS.spec)
+
+      local color = bucket.avgIlvlColor
+      if type(color) == "table" then
+        outBucket.avgIlvlColor = { r = color.r, g = color.g, b = color.b }
       end
+
+      local slots = {}
+      for slotKey, slot in pairs(bucket.slots or {}) do
+        -- Slot keys are "s"..slotID strings; a slot without an item ID is nothing.
+        if type(slotKey) == "string" and type(slot) == "table" and slot.id then
+          slots[slotKey] = Pick(slot, GI.DB_FIELDS.slot)
+        end
+      end
+      outBucket.slots = slots
+
+      clean.gear[specID] = outBucket
     end
   end
+
+  return clean
+end
+
+-- Writes one imported character and reports what happened:
+--   "new" | "replaced" | "merged" | "skipped"
+--
+-- The character being played is a special case. Their record and their active
+-- spec are live data coming from the running game and must not be replaced — but
+-- their *other* specs exist only in the import, and dropping the whole character
+-- loses them. So the active spec is kept and the rest are merged in.
+local function ApplyOneCharacter(charKey, charData, myKey, skipExisting)
+  if type(charKey) ~= "string" or type(charData) ~= "table" then return "skipped" end
+
+  local existing = GI.db.characters[charKey]
+  if skipExisting and existing then return "skipped" end
+
+  charData = SanitizeCharacter(charData)
+
+  if charKey ~= myKey or not existing then
+    GI.db.characters[charKey] = charData
+    return existing and "replaced" or "new"
+  end
+
+  local activeSpec = existing.character and existing.character.specID
+  local merged = false
+  for specID, bucket in pairs(charData.gear or {}) do
+    if specID ~= activeSpec then
+      existing.gear = existing.gear or {}
+      existing.gear[specID] = bucket
+      merged = true
+    end
+  end
+  return merged and "merged" or "skipped"
+end
+
+-- Writes parsed import data into the DB. Call only after any needed confirmation.
+-- skipExisting: if true, characters already in DB are skipped instead of written.
+-- Returns: count (new), overwritten (existing ones replaced wholesale), merged
+-- (the played character, whose other specs were folded in), skipped, charKey
+-- (single-char only), writtenKeys (list of all written charKeys)
+function GI.ApplyImport(importType, data, skipExisting)
+  if not GI.db or not GI.db.characters then return 0, 0, 0 end
+
+  local myKey = GI.PlayerKey()
+  local count, overwritten, merged, skipped = 0, 0, 0, 0
+  local writtenKeys = {}
+
+  local function Apply(charKey, charData)
+    local result = ApplyOneCharacter(charKey, charData, myKey, skipExisting)
+    if result == "new" then
+      count = count + 1
+    elseif result == "replaced" then
+      overwritten = overwritten + 1
+    elseif result == "merged" then
+      merged = merged + 1
+    else
+      skipped = skipped + 1
+      return
+    end
+    writtenKeys[#writtenKeys + 1] = charKey
+  end
+
+  if importType == "char" then
+    Apply(data.key, data.data)
+  else
+    for charKey, charData in pairs(data) do
+      Apply(charKey, charData)
+    end
+  end
+
   GI.RefreshCharacterList()
-  return count, overwritten, skipped, importType == "char" and data.key or nil, writtenKeys
+  return count, overwritten, merged, skipped, importType == "char" and data.key or nil, writtenKeys
 end
