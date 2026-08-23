@@ -127,7 +127,10 @@ local function GetGroupKey(data, groupBy)
   -- FACTION_LABELS_FROM_STRING localizes into the *viewer's* client language,
   -- so an imported character keeps a matching header instead of the exporter's.
   if groupBy == "faction" then
-    return FACTION_LABELS_FROM_STRING[ch.faction] or ch.faction or "Unknown"
+    if not ch.faction then return "Unknown" end
+    -- A Pandaren who has not picked a side yet is "Neutral", which Blizzard's
+    -- own table does not carry -- it holds Horde and Alliance only.
+    return FACTION_LABELS_FROM_STRING[ch.faction] or FACTION_NEUTRAL or ch.faction
   end
   if groupBy == "armor"   then return GI.CLASS_ARMOR[ch.class] or "Unknown" end
 end
@@ -210,6 +213,24 @@ local GROUP_BY_OPTIONS = {
   { "realm",   "OPT_GROUP_REALM"   },
   { "faction", "OPT_GROUP_FACTION" },
   { "armor",   "OPT_GROUP_ARMOR"   },
+}
+
+-- Tooltip recommendation radios. Order is the menu order; the first value of
+-- each pair is what lands in the config.
+local REC_SHOW_OPTIONS = {
+  { "none",   "OPT_REC_SHOW_NONE"   },
+  { "always", "OPT_REC_SHOW_ALWAYS" },
+  -- Shift is deliberately absent: it is Blizzard's default COMPAREITEMS
+  -- modifier, so it already covers the screen in comparison tooltips.
+  { "ctrl",   "OPT_REC_SHOW_CTRL"   },
+  { "alt",    "OPT_REC_SHOW_ALT"    },
+}
+
+-- Minimum item quality, as Enum.ItemQuality values.
+local REC_QUALITY_OPTIONS = {
+  { 2, "OPT_REC_Q_UNCOMMON" },
+  { 3, "OPT_REC_Q_RARE"     },
+  { 4, "OPT_REC_Q_EPIC"     },
 }
 
 local function AddGroupByRadios(description, keepOpen)
@@ -797,6 +818,44 @@ local function CreateMainWindow()
     local groupSub = rootDescription:CreateButton(L["OPT_GROUP_BY"])
     AddGroupByRadios(groupSub, true)
 
+    -- ── Recommendations ───────────────────────────────────────────────────────
+    -- Separate from Upgrades: that submenu is about drawing the track in this
+    -- window, this one is about the section added to item tooltips.
+    local recSub = rootDescription:CreateButton(L["OPT_RECOMMENDATIONS"])
+
+    recSub:CreateTitle(L["OPT_REC_SHOW"])
+    local function showGetter(v) return (GI.Config.Get("recommendShow") or "always") == v end
+    local function showSetter(v) GI.Config.Set("recommendShow", v) end
+    for _, opt in ipairs(REC_SHOW_OPTIONS) do
+      recSub:CreateRadio(L[opt[2]], showGetter, showSetter, opt[1])
+    end
+
+    recSub:CreateSpacer()
+    recSub:CreateTitle(L["OPT_REC_QUALITY"])
+    local function qGetter(v) return (GI.Config.Get("recommendMinQuality") or 2) == v end
+    local function qSetter(v) GI.Config.Set("recommendMinQuality", v) end
+    for _, opt in ipairs(REC_QUALITY_OPTIONS) do
+      recSub:CreateRadio(L[opt[2]], qGetter, qSetter, opt[1])
+    end
+
+    recSub:CreateSpacer()
+    recSub:CreateTitle(L["OPT_REC_IGNORE"])
+    recSub:CreateCheckbox(
+      L["OPT_REC_IGNORE_LEVEL"],
+      function() return GI.Config.Get("recommendIgnoreLevel") ~= false end,
+      function() GI.Config.Set("recommendIgnoreLevel", GI.Config.Get("recommendIgnoreLevel") == false) end
+    )
+    recSub:CreateCheckbox(
+      L["OPT_REC_IGNORE_OFFSPEC"],
+      function() return GI.Config.Get("recommendIgnoreOffspec") == true end,
+      function() GI.Config.Set("recommendIgnoreOffspec", GI.Config.Get("recommendIgnoreOffspec") ~= true) end
+    )
+    recSub:CreateCheckbox(
+      L["OPT_REC_IGNORE_BOE"],
+      function() return GI.Config.Get("recommendIgnoreBoE") == true end,
+      function() GI.Config.Set("recommendIgnoreBoE", GI.Config.Get("recommendIgnoreBoE") ~= true) end
+    )
+
     -- ── Upgrades ──────────────────────────────────────────────────────────────
     local upSub = rootDescription:CreateButton(L["OPT_UPGRADES"])
 
@@ -1200,7 +1259,7 @@ function GI.ShowCharacterGear(charKey)
           local tr, tg, tb = QColor(up.rank)
           trackHex = string.format("%02X%02X%02X", tr * 255, tg * 255, tb * 255)
         end
-        local trackText = "|cFF" .. trackHex .. L[up.key] .. "|r"
+        local trackText = "|cFF" .. trackHex .. (GI.TrackName(item.link, up) or L[up.key]) .. "|r"
 
         -- Rank colour is item quality shifted by one: 1/6 poor grey, 2/6 common
         -- white, 3/6 uncommon green, 4/6 rare blue, 5/6 epic, 6/6 legendary.

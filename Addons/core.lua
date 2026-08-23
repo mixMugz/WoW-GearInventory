@@ -382,6 +382,22 @@ function GI.ParseUpgradeTrack(itemLink)
   return nil
 end
 
+-- Localised name of a track. The client does hold translated track names, in
+-- C_Item.GetItemUpgradeInfo's trackString -- but only once the item is loaded,
+-- so the locale key stands in until then. A cold saved item therefore reads in
+-- English and corrects itself on the next draw, while a hovered item, whose
+-- tooltip is being shown, is always warm and always reads translated.
+function GI.TrackName(link, track)
+  if link then
+    local up = C_Item.GetItemUpgradeInfo(link)
+    if up and up.trackString and up.trackString ~= "" then
+      return up.trackString
+    end
+  end
+  if track and track.key then return GI.L[track.key] end
+  return nil
+end
+
 -- Resolves the upgrade track of a stored gear slot from its saved itemLink.
 -- Nothing about the track is persisted: deriving it on demand means a season
 -- change (new bonusIDs in GI.UPGRADE_TRACKS above) applies to every saved
@@ -437,6 +453,7 @@ GI.ATLAS = {
   WINDOW_BG        = "UI-Journeys-BG",
   FACTION_HORDE         = "UI-HUD-UnitFrame-Player-PVP-HordeIcon",
   FACTION_ALLIANCE      = "UI-HUD-UnitFrame-Player-PVP-AllianceIcon",
+  FACTION_NEUTRAL       = "UI-HUD-UnitFrame-Player-PVP-FFAIcon",
   OPT_CHARACTERS        = "socialqueuing-icon-group",
 }
 
@@ -486,6 +503,17 @@ GI.DEFAULTS = {
     colorUpgradeTrack  = true,   -- colorize the upgrade track name by its rank
     colorUpgradeRank   = true,   -- colorize the rank bar or text by progress tier
     upgradeRankAsStars = true,   -- rank as a star bar; false shows "3/6" instead
+    -- "Upgrades" section in item tooltips:
+    --   "none" | "always" | "ctrl" | "shift" | "alt"
+    recommendShow        = "always",
+    recommendMinQuality  = 2,      -- Enum.ItemQuality.Uncommon and above
+    -- true ignores the item's required level, so a low alt still sees gear it
+    -- will grow into; false hides characters who cannot equip it yet.
+    recommendIgnoreLevel = true,
+    -- true compares only against each character's last active spec
+    recommendIgnoreOffspec = false,
+    -- true skips bind-on-equip gear, which can be sold instead of handed on
+    recommendIgnoreBoE = false,
     debugMessages      = true,   -- chat output; false silences every addon message
     minimapButton = {
       hide       = false,

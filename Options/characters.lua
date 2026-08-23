@@ -411,9 +411,9 @@ local function BuildCharPanel()
       else row.raceIcon:Hide() end
       row.raceBorder:SetVertexColor(r, g, b)
 
-      if ch.faction then
-        row.factionTex:SetAtlas(ch.faction == "Horde"
-          and GI.ATLAS.FACTION_HORDE or GI.ATLAS.FACTION_ALLIANCE)
+      local factionAtlas = GI.FactionAtlas(ch.faction)
+      if factionAtlas then
+        row.factionTex:SetAtlas(factionAtlas)
         row.factionTex:Show()
       else
         row.factionTex:Hide()
@@ -488,7 +488,14 @@ local function BuildCharPanel()
         local spec = specs[n - i + 1]
         if spec then
           slot.icon:SetTexture(spec.icon) slot.frame:Show()
-          slot.cb:SetChecked(spec.bucket.incRecommend == true)
+
+          -- A character who has not chosen a specialization yet carries the
+          -- initial one, which recommendations cannot work with. The checkbox is
+          -- greyed out and shown clear until a real spec replaces it, at which
+          -- point the new bucket's own default turns it back on.
+          local real = GI.IsRealSpec(spec.specID)
+          slot.cb:SetChecked(real and spec.bucket.incRecommend == true)
+          slot.cb:SetEnabled(real)
           slot.cb:SetScript("OnClick", function(self)
             if row.charKey and GI.db and GI.db.characters[row.charKey] then
               local bucket = GI.db.characters[row.charKey].gear[spec.specID]

@@ -81,6 +81,19 @@ function GI.RaceAtlas(race, sex)
   return atlas
 end
 
+-- Faction emblem atlas, or nil when the faction is unknown.
+--
+-- A Pandaren created without a side is "Neutral" until the starting experience
+-- ends. The game draws no emblem for them at all, but a hole in a column that
+-- every other row fills reads as a fault, so they get the free-for-all marker
+-- from the same set instead -- it sits and scales like the other two.
+function GI.FactionAtlas(faction)
+  if faction == "Horde"    then return GI.ATLAS.FACTION_HORDE    end
+  if faction == "Alliance" then return GI.ATLAS.FACTION_ALLIANCE end
+  if faction == "Neutral"  then return GI.ATLAS.FACTION_NEUTRAL  end
+  return nil
+end
+
 function GI.RaceIconMarkup(race, sex, size)
   local atlas = GI.RaceAtlas(race, sex)
   if not atlas then return "" end
@@ -98,6 +111,16 @@ function GI.SpecInfo(specID)
   local _, name, _, icon = GetSpecializationInfoByID(specID)
   if name == "" then name = nil end
   return name, icon
+end
+
+-- False for the initial spec a character carries before choosing one. That spec
+-- has a real ID and a class icon, so nothing about it looks placeholder-like --
+-- the empty name is the only thing the client gives us to tell them apart.
+--
+-- Such a character has no armor or weapon profile to judge gear against, so
+-- recommendations skip them and the panel greys their checkbox out.
+function GI.IsRealSpec(specID)
+  return specID ~= nil and GI.SpecInfo(specID) ~= nil
 end
 
 -- "Name-Realm" key of the character being played, matching how entries are keyed

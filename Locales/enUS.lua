@@ -126,8 +126,38 @@ L["OPT_UPGRADE_TRACK"]   = "Upgrade track"
 L["OPT_UPGRADE_RANK"]    = "Upgrade rank"
 L["OPT_COLORED"]         = "Colored"
 L["OPT_RANK_AS_STARS"]   = "Show as stars"
+L["OPT_RECOMMENDATIONS"] = "Recommendations"
+L["OPT_REC_SHOW"]        = "Show"
+L["OPT_REC_SHOW_NONE"]   = "None"
+L["OPT_REC_SHOW_ALWAYS"] = "Always"
+L["OPT_REC_SHOW_CTRL"]   = "On Ctrl"
+L["OPT_REC_SHOW_ALT"]    = "On Alt"
+L["OPT_REC_QUALITY"]     = "Quality"
+L["OPT_REC_Q_UNCOMMON"]  = "Uncommon"
+L["OPT_REC_Q_RARE"]      = "Rare"
+L["OPT_REC_Q_EPIC"]      = "Epic"
+L["OPT_REC_IGNORE"]      = "Ignore"
+L["OPT_REC_IGNORE_LEVEL"] = "Level requirements"
+L["OPT_REC_IGNORE_OFFSPEC"] = "Offspec"
+L["OPT_REC_IGNORE_BOE"] = "Bind on Equip"
 L["OPT_DEBUG_MESSAGES"]  = "Debug messages"
 L["OPT_CHARACTERS"]      = "Saved Characters"
+
+-- ─── Tooltip Recommendations ─────────────────────────────────────────────────
+-- The arrow is not part of REC_GAIN: it is a real texture placed in its own
+-- column, so that it lines up whatever the digit count.
+
+L["REC_HEADER"]          = "Upgrades"
+L["REC_GAIN"]            = "|cFF00FF00+%d iLvl|r"
+-- The number already carries its minus sign.
+L["REC_LOSS"]            = "|cFFFF5555%d iLvl|r"
+-- Level for level. Not a loss, so it is neither red nor pointing anywhere.
+L["REC_SAME"]            = "|cFFFFD100%d iLvl|r"
+
+-- ─── F.A.Q. Panel ─────────────────────────────────────────────────────────────
+
+L["FAQ_Q_SPEC_LEVEL"]    = "Why is a character missing from tooltip recommendations?"
+L["FAQ_A_SPEC_LEVEL"]    = "Recommendations start at level 10, once a character can choose a specialization. Before that the game assigns an initial specialization that carries no weapon or armor profile, so there is nothing to judge an item against. Those characters are left out, and their checkbox in Saved Characters stays greyed out until a real specialization replaces it -- at which point it switches itself on."
 
 -- ─── Saved Characters Panel Columns ──────────────────────────────────────────
 -- Displayed as written; nothing uppercases them.

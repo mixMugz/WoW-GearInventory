@@ -22,6 +22,7 @@ Addons/exportimport.lua
 Addons/libs.lua
 Addons/ui.xml
 Addons/ui.lua
+Addons/recommend.lua
 Addons/broker.lua
 Addons/minimap.lua
 Options/characters.lua
