@@ -9,9 +9,10 @@
 -- is told apart by the tooltip's binding line, because warbound gear reports the
 -- same bind type.
 --
--- Depends on: GI.SPEC_INFO, GI.CLASS_ARMOR, GI.TEX.PORTRAIT_MASK,
---             GI.ATLAS.RACE_BORDER, GI.ATLAS.FACTION_* (Addons/core.lua),
---             GI.ClassRGB, GI.RaceAtlas, GI.SpecInfo (Addons/main.lua)
+-- Depends on: GI.TEX.PORTRAIT_MASK, GI.ATLAS.RACE_BORDER, GI.NAME_MARKUP,
+--             GI.Config, GI.DEFAULTS, GI.ParseUpgradeTrack, GI.GetSlotUpgrade,
+--             GI.TrackName (Addons/core.lua), GI.ClassRGB, GI.RaceAtlas,
+--             GI.FactionAtlas, GI.SpecInfo, GI.IsRealSpec (Addons/main.lua)
 
 local addonName, GI = ...
 local L = GI.L
@@ -129,80 +130,6 @@ local EQUIP_SLOTS = {
   INVTYPE_HOLDABLE        = { 17 },
 }
 
--- Slots carrying no armor or weapon restriction: everyone wears necks, rings,
--- trinkets and cloaks whatever their proficiency.
-local UNRESTRICTED_SLOT = {
-  [2] = true, [11] = true, [12] = true, [13] = true, [14] = true, [15] = true,
-}
-
--- ─── Item subclass → GI.SPEC_INFO vocabulary ─────────────────────────────────
--- GI.SPEC_INFO names weapons in its own words; these map Blizzard's subclass IDs
--- onto them. Anything absent is not equippable gear for a spec (fishing poles,
--- thrown, obsolete classes) and drops out on lookup.
-local WEAPON_NAME = {
-  [Enum.ItemWeaponSubclass.Axe1H]     = "Axe",
-  [Enum.ItemWeaponSubclass.Axe2H]     = "Axe2H",
-  [Enum.ItemWeaponSubclass.Bows]      = "Bow",
-  [Enum.ItemWeaponSubclass.Guns]      = "Gun",
-  [Enum.ItemWeaponSubclass.Mace1H]    = "Mace",
-  [Enum.ItemWeaponSubclass.Mace2H]    = "Mace2H",
-  [Enum.ItemWeaponSubclass.Polearm]   = "Polearm",
-  [Enum.ItemWeaponSubclass.Sword1H]   = "Sword",
-  [Enum.ItemWeaponSubclass.Sword2H]   = "Sword2H",
-  [Enum.ItemWeaponSubclass.Warglaive] = "Warglaive",
-  [Enum.ItemWeaponSubclass.Staff]     = "Staff",
-  [Enum.ItemWeaponSubclass.Unarmed]   = "Fist",
-  [Enum.ItemWeaponSubclass.Dagger]    = "Dagger",
-  [Enum.ItemWeaponSubclass.Crossbow]  = "Crossbow",
-  [Enum.ItemWeaponSubclass.Wand]      = "Wand",
-}
-
--- Matches the values in GI.CLASS_ARMOR. Cosmetic, Libram, Idol and the rest are
--- absent on purpose: they are not armor a spec can be judged against.
-local ARMOR_NAME = {
-  [Enum.ItemArmorSubclass.Cloth]   = "Cloth",
-  [Enum.ItemArmorSubclass.Leather] = "Leather",
-  [Enum.ItemArmorSubclass.Mail]    = "Mail",
-  [Enum.ItemArmorSubclass.Plate]   = "Plate",
-}
-
--- ─── Primary stat ─────────────────────────────────────────────────────────────
--- C_Item.GetItemStats keys its table by the *name* of the global string rather
--- than its value, so these are the same in every locale.
-local PRIMARY_STAT = {
-  ITEM_MOD_STRENGTH_SHORT  = "STR",
-  ITEM_MOD_AGILITY_SHORT   = "AGI",
-  ITEM_MOD_INTELLECT_SHORT = "INT",
-}
-
--- The primary stats an item carries, or nil when it carries none.
---
--- An agility dagger is no use to a warlock however well the class handles
--- daggers, which is what checking the weapon type alone kept missing.
---
--- Measured caveat: this answers for the player, not for the item. An omni-stat
--- trinket carrying agility, intellect and strength at once reported only agility
--- to a druid -- so the answer cannot be trusted for another character's spec.
--- SuitsSpec therefore uses it on armor and weapons only, where a fixed stat is
--- the rule and omni items are not.
---
--- Returning nil for "none found" also means a wrong key here degrades to the
--- old behaviour rather than quietly hiding every character.
-local function PrimaryStats(link)
-  local stats = C_Item.GetItemStats(link)
-  if not stats then return nil end
-
-  local found
-  for key, value in pairs(stats) do
-    local stat = PRIMARY_STAT[key]
-    if stat and (tonumber(value) or 0) > 0 then
-      found = found or {}
-      found[stat] = true
-    end
-  end
-  return found
-end
-
 -- ─── Suitability ──────────────────────────────────────────────────────────────
 
 -- Class token -> numeric class ID, which is what DoesItemContainSpec wants.
@@ -220,65 +147,20 @@ local function ClassID(token)
   return classIDs[token]
 end
 
-local function Contains(list, value)
-  if not list then return false end
-  for i = 1, #list do
-    if list[i] == value then return true end
-  end
-  return false
-end
-
 -- True when a spec could actually wear this item in that slot.
 --
--- C_Item.DoesItemContainSpec is the authority: it takes an explicit class and
--- spec and answers for that one rather than for whoever is looking, which is
--- what nothing else here manages. Measured on a druid -- a druid weapon came
--- back true for feral and false for a warlock, while an omni-stat trinket came
--- back true for both. That single call covers armor proficiency, weapon type
--- and primary stat together, and gets the omni-stat case right, which reading
--- the stat table never could.
+-- C_Item.DoesItemContainSpec takes an explicit class and spec and answers for
+-- that one rather than for whoever is looking, which is what nothing else here
+-- managed. Measured on a druid: a druid weapon came back true for feral and
+-- false for a warlock, while an omni-stat trinket came back true for both.
 --
--- The rules below stand in only when the class token maps to no class ID, which
--- means the game has a class this addon has not met. They need GI.SPEC_INFO,
--- and a spec missing from it can only be dropped -- which is exactly why the
--- API path takes the class straight off the character instead: a specialization
--- Blizzard adds tomorrow keeps working without an edit here.
-local function SuitsSpec(class, specID, slotID, item)
+-- One call covers armor proficiency, weapon type and primary stat together, and
+-- knows things no rule here could -- a tanking trinket goes to tanks, a healing
+-- one to healers, and a one-hander is turned down by two-handed specs.
+local function SuitsSpec(class, specID, item)
   local classID = ClassID(class)
-  if classID and item.link then
-    return C_Item.DoesItemContainSpec(item.link, classID, specID)
-  end
-
-  local spec = GI.SPEC_INFO[specID]
-  if not spec then return false end
-
-  if UNRESTRICTED_SLOT[slotID] then return true end
-  if item.stats and not item.stats[spec.stat] then return false end
-
-  local subclassID = item.subclassID
-  classID = item.classID
-
-  if classID == Enum.ItemClass.Armor then
-    if subclassID == Enum.ItemArmorSubclass.Shield then
-      return Contains(spec.oh, "Shield")
-    end
-    -- Off-hand holdables are Generic armor; only slot 17 reaches this line.
-    if subclassID == Enum.ItemArmorSubclass.Generic then
-      return Contains(spec.oh, "Offhand")
-    end
-    local armor = ARMOR_NAME[subclassID]
-    if not armor then return false end
-    return GI.CLASS_ARMOR[spec.class] == armor
-  end
-
-  if classID == Enum.ItemClass.Weapon then
-    local name = WEAPON_NAME[subclassID]
-    if not name then return false end
-    if slotID == 17 then return Contains(spec.oh, name) end
-    return Contains(spec.mh, name)
-  end
-
-  return false
+  if not classID then return false end
+  return C_Item.DoesItemContainSpec(item.link, classID, specID)
 end
 
 -- ─── Evaluation ───────────────────────────────────────────────────────────────
@@ -321,6 +203,49 @@ local function EquippedLevels(bucket, slotID)
   return slot.ilvl, CeilingOf(slot.ilvl, GI.GetSlotUpgrade(slot))
 end
 
+-- Whether the off-hand can take this item at all.
+--
+-- Slot 17 holds either a second weapon or a shield or a holdable, and which one
+-- depends on the specialization -- something DoesItemContainSpec cannot answer,
+-- because it knows nothing about slots. A one-hander suits a protection warrior
+-- perfectly well, yet it is never going in the hand holding their shield.
+--
+-- What the character already wears settles it: a spec carrying armor there does
+-- not dual-wield. An empty off-hand says nothing either way, so it stays a
+-- candidate.
+local function OffHandAccepts(bucket, item)
+  local slot = bucket.slots and bucket.slots.s17
+  if not (slot and slot.id) then return true end
+
+  local _, _, _, _, _, equippedClass = C_Item.GetItemInfoInstant(slot.id)
+  if not equippedClass then return true end
+  return equippedClass == item.classID
+end
+
+-- A unique item cannot sit beside another copy of itself, so if the character
+-- already wears one, that is the slot it would replace -- the other one is not
+-- an option however weak it happens to be. Without this, a Hero-track ring gets
+-- compared against whatever junk is in the other finger and reports a gain that
+-- equipping it could never produce.
+--
+-- Matching is by item ID, which is stored, so this works for a character whose
+-- gear the client has not loaded.
+--
+-- Uniqueness also comes in a category form -- "Unique-Equipped: <group> (1)",
+-- where the conflict is with a different item from the same group. That is not
+-- handled and does not need to be: those are legendaries and artifacts, which
+-- bind on pickup and never reach this far.
+local function NarrowToUnique(bucket, slotIDs, itemID)
+  local slots = bucket.slots
+  if not slots then return slotIDs end
+
+  for i = 1, #slotIDs do
+    local slot = slots["s" .. slotIDs[i]]
+    if slot and slot.id == itemID then return { slotIDs[i] } end
+  end
+  return slotIDs
+end
+
 -- Walks one character's enabled specs and reports where the item would help.
 -- Returns the best item level gained and the list of specs that would gain it,
 -- or nil when it is no upgrade anywhere.
@@ -337,10 +262,9 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
   local class      = character.class
 
   for specID, bucket in pairs(entry.gear) do
-    -- The initial spec a character carries before choosing one has no armor or
-    -- weapon profile to judge gear against, so it is skipped. Asked of the game
-    -- rather than of GI.SPEC_INFO, so a specialization this addon has never
-    -- heard of still counts.
+    -- The initial spec a character carries before choosing one is not something
+    -- gear can be judged against, so it is skipped. Asked of the game, so a
+    -- specialization this addon has never heard of still counts.
     local usable = GI.IsRealSpec(specID)
     if activeSpecOnly and specID ~= activeSpec then usable = false end
     if usable and bucket.incRecommend ~= false then
@@ -351,42 +275,63 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
       -- judged against the average of what is in them -- putting one on gives up
       -- the off-hand as well. The average, not the sum: the column is in item
       -- levels, and a doubled figure would not be one.
-      local base, baseCeiling
-      if item.twoHand and SuitsSpec(class, specID, 16, item) then
-        local mh,  mhCap = EquippedLevels(bucket, 16)
-        local oh,  ohCap = EquippedLevels(bucket, 17)
-        base, baseCeiling = (mh + oh) / 2, (mhCap + ohCap) / 2
-      else
-        for i = 1, #slotIDs do
-          local slotID = slotIDs[i]
-          if SuitsSpec(class, specID, slotID, item) then
-            local ilvl, cap = EquippedLevels(bucket, slotID)
-            if not base or ilvl < base then base, baseCeiling = ilvl, cap end
+      -- Suitability is a property of the spec and the item, not of the slot,
+      -- so it is settled once and the slots are only walked afterwards.
+      --
+      -- Every candidate slot is then scored on its own and the best kept, rather
+      -- than picking the weakest by item level and scoring that. The two differ
+      -- whenever the order by item level and the order by ceiling disagree: a
+      -- 292 Hero ring is weaker today than a 298 piece off any track, yet
+      -- replacing the 298 one is the better move. Rings, trinkets and the two
+      -- one-hand slots all run into it.
+      --
+      -- Levels are floored so a half-item-level average never rounds in the
+      -- item's favour and reports a gain that is not quite there.
+      local gain, capGain
+      if SuitsSpec(class, specID, item) then
+        if item.twoHand then
+          -- One comparison, because it fills both slots at once.
+          local mh, mhCap = EquippedLevels(bucket, 16)
+          local oh, ohCap = EquippedLevels(bucket, 17)
+          gain    = math.floor(item.ilvl    - (mh + oh) / 2)
+          capGain = math.floor(item.ceiling - (mhCap + ohCap) / 2)
+        else
+          local candidates = slotIDs
+          if item.unique then
+            candidates = NarrowToUnique(bucket, slotIDs, item.id)
+          end
+
+          for i = 1, #candidates do
+            local slotID = candidates[i]
+            if slotID ~= 17 or OffHandAccepts(bucket, item) then
+              local ilvl, cap = EquippedLevels(bucket, slotID)
+              local g = math.floor(item.ilvl    - ilvl)
+              local c = math.floor(item.ceiling - cap)
+
+              -- A real gain outranks a bigger ceiling: the tooltip leads with
+              -- what the item does today.
+              if not gain or g > gain or (g == gain and c > capGain) then
+                gain, capGain = g, c
+              end
+            end
           end
         end
       end
 
-      if base then
-        -- Floored, so a half-item-level average never rounds in the item's
-        -- favour and reports a gain that is not quite there.
-        local gain    = math.floor(item.ilvl - base)
-        local capGain = math.floor(item.ceiling - baseCeiling)
-
-        -- Listed when it wins now, or when its track can still take it past
-        -- what they have -- the second case is the whole point of showing a
-        -- piece that is currently the worse of the two.
-        if gain > 0 or capGain > 0 then
-          matches[#matches + 1] = {
-            specID   = specID,
-            gain     = gain,
-            -- Marked only when the item is behind on item level today. A piece
-            -- that already wins needs no argument made for it, and the marker
-            -- then means one thing only: worse now, further later.
-            potential = gain <= 0 and capGain > 0,
-            isActive  = (specID == activeSpec),
-          }
-          if not best or gain > best then best = gain end
-        end
+      -- Listed when it wins now, or when its track can still take it past what
+      -- they have -- the second case is the whole point of showing a piece that
+      -- is currently the worse of the two.
+      if gain and (gain > 0 or capGain > 0) then
+        matches[#matches + 1] = {
+          specID   = specID,
+          gain     = gain,
+          -- Marked only when the item is behind on item level today. A piece
+          -- that already wins needs no argument made for it, and the marker
+          -- then means one thing only: worse now, further later.
+          potential = gain <= 0 and capGain > 0,
+          isActive  = (specID == activeSpec),
+        }
+        if not best or gain > best then best = gain end
       end
     end
   end
@@ -932,13 +877,13 @@ local function OnItemTooltip(tooltip, data)
   local itemTrack = GI.ParseUpgradeTrack(link)
   local item = {
     link       = link,
+    id         = C_Item.GetItemInfoInstant(link),
+    classID    = select(6, C_Item.GetItemInfoInstant(link)),
+    unique     = C_Item.GetItemUniquenessByID(link) == true,
     ilvl       = itemIlvl,
     ceiling    = CeilingOf(itemIlvl, itemTrack),
     track      = itemTrack,
-    classID    = classID,
-    subclassID = subclassID,
     twoHand    = TWO_HANDED[equipLoc],
-    stats      = PrimaryStats(link),
   }
 
   local checkLevel    = GI.Config.Get("recommendIgnoreLevel") == false
