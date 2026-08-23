@@ -1109,6 +1109,9 @@ function GI.ShowCharacterGear(charKey)
         if GI.Config.Get("colorUpgradeTrack") ~= false then
           local tr, tg, tb = QColor(up.rank)
           trackText = string.format("|cFF%02X%02X%02X%s|r", tr * 255, tg * 255, tb * 255, trackText)
+        else
+          -- Uncoloured still means white: the fontstring itself is dimmed grey.
+          trackText = "|cFFFFFFFF" .. trackText .. "|r"
         end
 
         -- Star bar spans the track's own length, so a track with a different
