@@ -9,10 +9,10 @@
 -- is told apart by the tooltip's binding line, because warbound gear reports the
 -- same bind type.
 --
--- Depends on: GI.TEX.PORTRAIT_MASK, GI.ATLAS.RACE_BORDER, GI.NAME_MARKUP,
---             GI.Config, GI.DEFAULTS, GI.ParseUpgradeTrack, GI.GetSlotUpgrade,
---             GI.TrackName (Addons/core.lua), GI.ClassRGB, GI.RaceAtlas,
---             GI.FactionAtlas, GI.SpecInfo, GI.IsRealSpec (Addons/main.lua)
+-- A leaf: it leans on core.lua for the upgrade track tables, shared atlases and
+-- config, and on main.lua for the class, race and faction lookups and the
+-- tooltip font helpers, and it defines nothing that another file reads back.
+-- Listing the individual names here only kept going stale, so it no longer does.
 
 local addonName, GI = ...
 local L = GI.L

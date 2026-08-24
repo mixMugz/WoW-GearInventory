@@ -6,6 +6,20 @@ local addonName, GI = ...
 
 -- ─── Shared Utilities ─────────────────────────────────────────────────────────
 
+-- Deferred-load tracing, toggled by /gi trace. Saved rather than held in a
+-- global, because what it is for is the login sequence -- and a global does not
+-- survive the reload that produces one.
+--
+-- Kept out of the options panel: a diagnostic, not a setting.
+function GI.TraceEnabled()
+  return GI.Config.Get("traceLoad") == true
+end
+
+function GI.Trace(fmt, ...)
+  if not GI.TraceEnabled() then return end
+  print("|cFF00C9FFGI|r " .. string.format(fmt, ...))
+end
+
 -- Returns r, g, b (0–1) for a class token. Uses WoW's built-in RAID_CLASS_COLORS.
 function GI.ClassRGB(classToken)
   local c = classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken]
@@ -58,14 +72,10 @@ function GI.DisplayName(ch)
   return (ch.name or "?") .. "-" .. (ch.realm or "?")
 end
 
--- Returns an inline |A:...:14:14|a atlas markup string for a race icon.
--- UnitSex() values: 1 = unknown, 2 = male, 3 = female.
--- Strategy:
---   1. GetRaceAtlas(race, sex) — engine-provided atlas name.
---   2. Manual fallback — try several known atlas prefixes with C_Texture
---      validation: raceicon128-, raceicon64-, raceicon-.
---   3. Cache results per race+sex combo.
-
+-- ─── Race Icons ───────────────────────────────────────────────────────────────
+-- Cached per race+sex: every gear row, tooltip line and options row asks for
+-- the same handful of combinations. Sex comes from UnitSex -- 1 is unknown,
+-- 2 male, 3 female -- and anything but 3 is drawn male.
 local raceIconCache = {}
 
 -- race (from UnitRace) → atlas token override.
@@ -79,8 +89,9 @@ local RACE_ATLAS_TOKEN = {
   ["scourge"]            = "undead",
 }
 
--- Returns the atlas name for a race icon, or nil if unavailable.
--- Caches results per race+sex combo.
+-- Atlas name for a race icon. nil only when race itself is nil: the last resort
+-- below builds a name whether or not the atlas exists, because SetAtlas draws
+-- nothing rather than erroring on a name the client does not know.
 function GI.RaceAtlas(race, sex)
   if not race then return nil end
 
@@ -317,7 +328,7 @@ function GI.BuildLauncherTooltip(tip)
 end
 
 -- ─── Database ─────────────────────────────────────────────────────────────────
--- Initialisation and migrations live in Addons/db.lua (GI.InitDB).
+-- Initialisation lives in Addons/db.lua (GI.InitDB). There are no migrations.
 
 -- ─── Item Cache ───────────────────────────────────────────────────────────────
 -- C_Item.GetItemInfo returns nil for items absent from the client cache.
@@ -338,20 +349,77 @@ local function HasPending()
   return next(pendingItems) ~= nil
 end
 
-local function HasPendingForChar(charKey)
+-- The event frame is created at the bottom of the file, but the queue below
+-- registers events on it, so the name has to exist by then.
+local eventFrame
+
+-- True while any of a character's slots is still waiting on the client. Drives
+-- the greyed-out average in the list: asked once per row instead of walking
+-- sixteen slots through C_Item.GetItemInfo on every redraw.
+function GI.IsCharLoading(charKey)
   for _, p in pairs(pendingItems) do
     if p.charKey == charKey then return true end
   end
   return false
 end
 
--- ilvl readiness: not persisted, defaults to true for previous-session data.
-local ilvlReady = {}
+-- Opening the window queues every slot of every character, and each answer
+-- would otherwise redraw the whole list on its own. Collect them and draw once
+-- shortly after the flurry stops.
+local REDRAW_DELAY   = 0.1
+local dirtyChars     = {}
+local dirtyScheduled = false
 
-function GI.IsIlvlReady(charKey)
-  return ilvlReady[charKey] ~= false
+local function MarkCharDirty(charKey)
+  if charKey then dirtyChars[charKey] = true end
+  if dirtyScheduled then return end
+  dirtyScheduled = true
+
+  C_Timer.After(REDRAW_DELAY, function()
+    dirtyScheduled = false
+    local keys = dirtyChars
+    dirtyChars = {}
+    if not GI.OnCharacterDataUpdated then return end
+
+    -- The callback redraws the whole list either way and only reads the key to
+    -- decide whether the open gear panel needs rebuilding, so one call carrying
+    -- the selected character covers the batch.
+    local selected
+    for key in pairs(keys) do
+      if GI.IsMainWindowSelection and GI.IsMainWindowSelection(key) then
+        selected = key
+      end
+    end
+    GI.OnCharacterDataUpdated(selected)
+  end)
 end
 
+-- Puts one slot in the queue and asks the client for its data. Returns true if
+-- the request went out, false if that slot was already queued.
+--
+-- The event is registered before the request, never after: ITEM_DATA_LOAD_RESULT
+-- fires synchronously for an item the client already holds, so a request sent
+-- while the event is unregistered answers into nothing and strands its queue
+-- entry for the rest of the session. Re-registering an event is a no-op.
+--
+-- The link is what gets asked for when there is one. RequestLoadItemDataByID
+-- takes an ItemInfo, which is an id or a link, and the two are not the same
+-- item to the client: an id loads the base item, while the panel reads names off
+-- the saved link, bonuses and all, which loads separately. Warming the id and
+-- reading the link left every character cold on its first open.
+--
+-- The queue stays keyed by id either way: the event reports an id, so that is
+-- what the answer can be matched on.
+local function QueueItem(charKey, itemID, slotID, specID, link)
+  local pkey = PendingKey(charKey, itemID, slotID)
+  if pendingItems[pkey] then return false end
+
+  eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+  pendingItems[pkey] = { charKey = charKey, slotID = slotID, itemID = itemID, specID = specID }
+  C_Item.RequestLoadItemDataByID(link or itemID)
+  GI.Trace("queue %s s%d id=%d by=%s", charKey, slotID, itemID, link and "link" or "id")
+  return true
+end
 
 -- ─── Avg ilvl ─────────────────────────────────────────────────────────────────
 
@@ -371,8 +439,6 @@ local function FetchAvgIlvl()
 end
 
 -- ─── Gear Scan ────────────────────────────────────────────────────────────────
-
-local eventFrame -- forward-declared; assigned below
 
 local function ScanCharacterGear(isLoginScan)
   local L = GI.L
@@ -516,12 +582,10 @@ local function ScanCharacterGear(isLoginScan)
           ilvl    = effectiveIlvl,
           quality = finalQ,
           icon    = C_Item.GetItemIconByID(itemID),
-          cached  = true,
         }
+        GI.Trace("scan %s s%d id=%d READ ok", key, slot.id, itemID)
         if isLoginScan then
-          local pkey = PendingKey(key, itemID, slot.id)
-          pendingItems[pkey] = { charKey = key, slotID = slot.id, itemID = itemID, specID = specIDKey }
-          C_Item.RequestLoadItemDataByID(itemID)
+          QueueItem(key, itemID, slot.id, specIDKey, itemLink)
         end
       else
         -- Item data not yet in cache; queue for deferred resolution.
@@ -531,11 +595,10 @@ local function ScanCharacterGear(isLoginScan)
           ilvl    = (specSlots[skey] and specSlots[skey].ilvl) or 0,
           quality = (specSlots[skey] and specSlots[skey].quality) or 1,
           icon    = C_Item.GetItemIconByID(itemID),
-          cached  = false,
         }
-        local pkey = PendingKey(key, itemID, slot.id)
-        pendingItems[pkey] = { charKey = key, slotID = slot.id, itemID = itemID, specID = specIDKey }
-        C_Item.RequestLoadItemDataByID(itemID)
+        GI.Trace("scan %s s%d id=%d COLD link=%s", key, slot.id, itemID,
+          itemLink and "y" or "n")
+        QueueItem(key, itemID, slot.id, specIDKey, itemLink)
       end
     end
   end
@@ -544,15 +607,6 @@ local function ScanCharacterGear(isLoginScan)
   local cr, cg, cb = GetItemLevelColor()
   specBucket.avgIlvlColor = { r = cr, g = cg, b = cb }
   specBucket.lastUpdate   = time()
-
-  if HasPending() then
-    eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
-  end
-
-  -- avgIlvl is taken from C_PaperDollInfo.GetAverageItemLevel() which is
-  -- server-authoritative and accurate immediately. Mark as ready so the ~
-  -- indicator never shows; deferred loading only corrects per-slot display.
-  ilvlReady[key] = true
 
   -- Close the loop on a queued scan. Ordinary scans stay silent: they fire on
   -- every gear and spec change, and nobody asked for them.
@@ -565,6 +619,19 @@ local function ScanCharacterGear(isLoginScan)
   end
 end
 
+-- Changing a full outfit fires PLAYER_EQUIPMENT_CHANGED once per slot, and a
+-- timer each would run the same whole-character scan sixteen times over. Keep
+-- one timer and push it back instead, so the scan runs once the changes stop.
+local scanTimer
+
+local function ScheduleScan()
+  if scanTimer then scanTimer:Cancel() end
+  scanTimer = C_Timer.NewTimer(0.5, function()
+    scanTimer = nil
+    ScanCharacterGear()
+  end)
+end
+
 -- Public entry point for the force-rescan button in ui.lua.
 GI.ScanCurrentCharacter = ScanCharacterGear
 
@@ -573,33 +640,30 @@ function GI.DeleteAllCharacters()
   local count = 0
   for _ in pairs(GI.db.characters) do count = count + 1 end
   GI.db.characters = {}
-  ilvlReady = {}
   GI.Print(string.format(GI.L["DELETE_ALL_DONE"], count))
   GI.ScanCurrentCharacter()
 end
+
+-- An item the panel finds cold at draw time is waited on by the panel itself,
+-- through ItemMixin:ContinueOnItemLoad -- see AwaitItem in ui.lua. The queue
+-- here stays for the login warm-up and the scan, which resolve saved data
+-- rather than draw it.
 
 -- Queues C_Item.RequestLoadItemDataByID for all gear slots of all saved characters.
 -- Needed so item tooltips (gems, enchants, etc.) resolve from the client cache.
 function GI.WarmUpAllCharacters()
   if not GI.db or not GI.db.characters then return end
-  local queued = false
+
+  local queued, total = 0, 0
   for charKey, d in pairs(GI.db.characters) do
     if d and d.gear then
       for specID, bucket in pairs(d.gear) do
         if bucket.slots then
           for skey, slot in pairs(bucket.slots) do
-            -- Upgrade track is derived on demand now; drop the values persisted
-            -- by older versions so saved data matches the documented schema.
-            slot.upTrack, slot.upCur, slot.upMax, slot.upRank = nil, nil, nil, nil
-            slot.expac = nil
-            local itemID = slot.id
-            if itemID then
-              local slotID = tonumber(skey:sub(2))
-              local pkey   = PendingKey(charKey, itemID, slotID)
-              if not pendingItems[pkey] then
-                pendingItems[pkey] = { charKey = charKey, slotID = slotID, itemID = itemID, specID = specID }
-                C_Item.RequestLoadItemDataByID(itemID)
-                queued = true
+            if slot.id then
+              total = total + 1
+              if QueueItem(charKey, slot.id, tonumber(skey:sub(2)), specID, slot.link) then
+                queued = queued + 1
               end
             end
           end
@@ -607,15 +671,12 @@ function GI.WarmUpAllCharacters()
       end
     end
   end
-  if queued then
-    eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
-  end
+  GI.Trace("warmup: queued %d of %d slots", queued, total)
 end
 
 function GI.DeleteCharacter(charKey)
   if not GI.db or not GI.db.characters[charKey] then return end
   GI.db.characters[charKey] = nil
-  ilvlReady[charKey] = nil
 end
 
 function GI.DeleteSpec(charKey, specID)
@@ -717,7 +778,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     end
 
   elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
-    C_Timer.After(0.5, ScanCharacterGear)
+    ScheduleScan()
 
   elseif event == "PLAYER_REGEN_ENABLED"
       or event == "PLAYER_UNGHOST"
@@ -726,7 +787,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     -- the player is no longer dead. ScanCharacterGear re-checks both itself and
     -- simply re-queues if the other one still holds.
     if pendingScan then
-      C_Timer.After(0.5, ScanCharacterGear)
+      ScheduleScan()
     end
 
   elseif event == "PLAYER_REGEN_DISABLED" then
@@ -750,18 +811,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     if not success then
       for pkey, p in pairs(matched) do
         pendingItems[pkey] = nil
-        if not HasPendingForChar(p.charKey) then
-          ilvlReady[p.charKey] = true
-        end
-        if GI.OnCharacterDataUpdated then
-          GI.OnCharacterDataUpdated(p.charKey)
-        end
+        MarkCharDirty(p.charKey)
       end
       if not HasPending() then
         self:UnregisterEvent("ITEM_DATA_LOAD_RESULT")
       end
       return
     end
+
+    local myKey = GI.PlayerKey()
 
     for pkey, pending in pairs(matched) do
       local charData   = GI.db and GI.db.characters[pending.charKey]
@@ -771,23 +829,41 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
       local slotData   = specSlots and specSlots[skey]
       local lookupKey  = (slotData and slotData.id == itemID and slotData.link) or itemID
       local name, link, quality, ilvl = C_Item.GetItemInfo(lookupKey)
+      local via = "link"
       if not name then
         name, link, quality, ilvl = C_Item.GetItemInfo(itemID)
+        via = name and "id" or "none"
       end
+      GI.Trace("result %s s%d id=%d resolved=%s via=%s", pending.charKey,
+        pending.slotID, itemID, name and "y" or "n", via)
       if name then
         if charData and specSlots then
           local slot = specSlots[skey]
           if slot and slot.id == itemID then
-            local resolvedLink = slot.link or link
+            -- Prefer the freshly resolved link. A link captured while the
+            -- item was still loading carries an empty name and a placeholder
+            -- quality, and writing it back would keep that pushed into every
+            -- tooltip and export from then on.
+            local resolvedLink = link or slot.link
             -- This handler also fires for saved characters (WarmUpAllCharacters
             -- queues their slots too), so only refresh the item level when the
-            -- live instance is readable — i.e. the current player still has this
-            -- exact item in that slot. For anyone else the value captured by
-            -- their own scan is authoritative: a link-derived level would clobber
-            -- it, and is plain wrong for level-scaling gear such as heirlooms.
-            local location   = ItemLocation:CreateFromEquipmentSlot(pending.slotID)
-            local isLiveSlot = C_Item.DoesItemExist(location)
-                           and C_Item.GetItemID(location) == itemID
+            -- live instance is readable -- i.e. this is the played character and
+            -- they still have this exact item in that slot. For anyone else the
+            -- value captured by their own scan is authoritative: a link-derived
+            -- level would clobber it, and is plain wrong for level-scaling gear
+            -- such as heirlooms.
+            --
+            -- The character has to be checked as well as the item. Equipment
+            -- slots only ever answer for whoever is being played, and an alt can
+            -- hold the same itemID in the same slot -- upgrading a track moves
+            -- the bonusID, not the item -- so matching on the item alone writes
+            -- the played character's level onto theirs.
+            local location, isLiveSlot
+            if pending.charKey == myKey then
+              location   = ItemLocation:CreateFromEquipmentSlot(pending.slotID)
+              isLiveSlot = C_Item.DoesItemExist(location)
+                       and C_Item.GetItemID(location) == itemID
+            end
             local effectiveIlvl
             if isLiveSlot then
               effectiveIlvl = C_Item.GetCurrentItemLevel(location)
@@ -806,9 +882,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
               slot.ilvl = ilvl or 0
             end
             slot.icon    = C_Item.GetItemIconByID(itemID) or slot.icon
-            slot.cached  = true
             -- FetchAvgIlvl() returns the current player's value only — skip for other chars.
-            local myKey = GI.PlayerKey()
             if pending.charKey == myKey then
               local fresh = FetchAvgIlvl()
               if fresh then
@@ -825,14 +899,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
       -- data for it, so a pending entry kept past this point would never resolve
       -- and would hold ITEM_DATA_LOAD_RESULT registered for the whole session.
       pendingItems[pkey] = nil
-
-      if not HasPendingForChar(pending.charKey) then
-        ilvlReady[pending.charKey] = true
-      end
-
-      if GI.OnCharacterDataUpdated then
-        GI.OnCharacterDataUpdated(pending.charKey)
-      end
+      MarkCharDirty(pending.charKey)
     end
 
     if not HasPending() then
@@ -847,7 +914,11 @@ SLASH_GEARINVENTORY1 = "/gi"
 SLASH_GEARINVENTORY2 = "/gearinventory"
 SlashCmdList["GEARINVENTORY"] = function(msg)
   local cmd = msg and msg:lower():match("^%s*(.-)%s*$") or ""
-  if cmd == "info" then
+  if cmd == "trace" then
+    local on = not GI.TraceEnabled()
+    GI.Config.Set("traceLoad", on)
+    GI.Print(on and GI.L["TRACE_ON"] or GI.L["TRACE_OFF"])
+  elseif cmd == "info" then
     GI.OpenOptions()        -- Options/main.lua
   else
     GI.ToggleMainWindow()   -- Addons/ui.lua

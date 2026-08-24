@@ -238,7 +238,7 @@ GI.DB_FIELDS = {
   -- avgIlvlColor is a nested { r, g, b } and is handled separately;
   -- slots is the table below.
   spec      = { "incRecommend", "avgIlvl", "lastUpdate" },
-  slot      = { "id", "link", "ilvl", "quality", "icon", "cached" },
+  slot      = { "id", "link", "ilvl", "quality", "icon" },
 }
 
 -- ─── Textures & Atlases ───────────────────────────────────────────────────────
@@ -379,6 +379,7 @@ GI.DEFAULTS = {
     -- true skips bind-on-equip gear, which can be sold instead of handed on
     recommendIgnoreBoE = false,
     debugMessages      = true,   -- chat output; false silences every addon message
+    traceLoad          = false,  -- item load tracing, toggled by /gi trace
     minimapButton = {
       hide       = false,
       -- Angle in degrees around the minimap ring. Named after LibDBIcon's own

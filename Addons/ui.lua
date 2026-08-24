@@ -44,6 +44,90 @@ end
 
 -- Returns color code for avgIlvl from stored per-character color (saved during scan).
 -- Falls back to white if no color is stored (nil in DB).
+-- Grey used for an average whose gear is still resolving.
+local COLD_ILVL_COLOR = "|cFF808080"
+
+-- Items the panel is already waiting on, keyed by id. ContinueOnItemLoad fires
+-- once and clears itself, so without this a redraw that still finds the item
+-- cold would queue a second wait, and its callback a third.
+local awaitingItem = {}
+
+-- One redraw per batch of arrivals. A panel opened cold waits on every slot at
+-- once, and the client answers them in the same tick or the next -- and the
+-- first answer is usually enough to make the rest readable, so redrawing per
+-- callback repeats the same full draw a dozen times over.
+local redrawKeys, redrawScheduled = {}, false
+
+local function ScheduleRedraw(charKey)
+  if charKey then redrawKeys[charKey] = true end
+  if redrawScheduled then return end
+  redrawScheduled = true
+
+  C_Timer.After(0, function()
+    redrawScheduled = false
+    local keys = redrawKeys
+    redrawKeys = {}
+
+    local w = GI.mainWindow
+    if not (w and w:IsShown()) then return end
+
+    GI.RefreshCharacterList()
+    for key in pairs(keys) do
+      if GI.IsMainWindowSelection(key) then
+        GI.ShowCharacterGear(key)
+        break
+      end
+    end
+  end)
+end
+
+-- Waits for one item's data and redraws when it lands.
+--
+-- Blizzard's own path: the callback is registered against the item and fires
+-- when ITEM_DATA_LOAD_RESULT reports it, with the request sent underneath. It
+-- answers for itself, which the addon's queue could not always do -- an answer
+-- that arrived with no matching queue entry left the row on "Loading..." until
+-- something else redrew it.
+local function AwaitItem(item, charKey)
+  local id = item and item.id
+  if not id or awaitingItem[id] then return end
+
+  local obj
+  if item.link then
+    obj = Item:CreateFromItemLink(item.link)
+  else
+    obj = Item:CreateFromItemID(id)
+  end
+  if not obj or obj:IsItemEmpty() then return end
+
+  awaitingItem[id] = true
+  obj:ContinueOnItemLoad(function()
+    awaitingItem[id] = nil
+    GI.Trace("loaded id=%d", id)
+    ScheduleRedraw(charKey)
+  end)
+end
+
+-- The item's name if the client can produce one right now, else nil.
+--
+-- Asked every draw rather than remembered in the database: whether an item is
+-- readable is a fact about this session's client cache, and a saved flag would
+-- claim "loaded" on the next login while the cache is still cold.
+--
+-- The saved link is tried first because it carries the character's own bonuses;
+-- the bare id is the fallback for a slot saved without one.
+local function ItemNameNow(item)
+  if not item then return nil end
+  if item.link then
+    local name = C_Item.GetItemInfo(item.link)
+    if name then return name end
+  end
+  if item.id then
+    return (C_Item.GetItemInfo(item.id))
+  end
+  return nil
+end
+
 local function IlvlColorCode(charData)
   local c = charData and charData.avgIlvlColor
   if c then
@@ -290,7 +374,10 @@ end
 local function PrefetchTooltipData(specSlots)
   if not specSlots then return end
   for _, item in pairs(specSlots) do
-    if item.link and item.cached ~= false then
+    -- Every link, cold ones included: GetHyperlink is what pulls the item's own
+    -- data in, so filtering to the ones already readable would skip exactly the
+    -- slots this is here to warm.
+    if item.link then
       local data = C_TooltipInfo.GetHyperlink(item.link)
       if data then PrefetchLines(data.lines) end
     end
@@ -300,8 +387,8 @@ end
 -- ─── Custom Item Tooltip Renderer ────────────────────────────────────────────
 -- Renders lines from C_TooltipInfo.GetHyperlink() manually so GameTooltip.Icon
 -- is never set, avoiding the large icon shown above the tooltip frame.
--- GemSocket lines carry gemIcon directly in the data; SellPrice is rebuilt
--- from line.price using GetCoinTextureString.
+-- GemSocket lines carry gemIcon directly in the data. SellPrice is dropped --
+-- see the branch that handles it below.
 local function RenderItemTooltip(tooltip, link)
   local data = C_TooltipInfo.GetHyperlink(link)
   if not data or not data.lines then
@@ -381,7 +468,7 @@ local function GetOrCreateGearRow(idx)
     if not link then return end
     suppressCompare = true
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    if parent.itemData and parent.itemData.cached ~= false then
+    if parent.itemData and ItemNameNow(parent.itemData) then
       RenderItemTooltip(GameTooltip, link)
       local qr, qg, qb = QColor(parent.itemData.quality or 1)
       ColorTipBorder(qr, qg, qb)
@@ -623,13 +710,13 @@ local function CharList_CharButton(btn, nodeArg)
   btn.raceBorder:SetVertexColor(r, g, b)
   btn.realmFS:SetText(ch.realm or "")
 
-  local ready      = GI.IsIlvlReady(entry.key)
   local listBucket = d.gear and ch.specID and d.gear[ch.specID]
   if listBucket and listBucket.avgIlvl ~= nil then
-    local suffix = not ready and "|cFF666666~|r" or ""
-    btn.ilvlFS:SetText(IlvlColorCode(listBucket) .. listBucket.avgIlvl .. "|r" .. suffix)
-  elseif not ready then
-    btn.ilvlFS:SetText("|cFF666666...|r")
+    -- Grey while items are still on their way, the usual tier colour once they
+    -- have landed -- the row says at a glance whether its gear is ready to read.
+    local loading = GI.IsCharLoading and GI.IsCharLoading(entry.key)
+    local code    = loading and COLD_ILVL_COLOR or IlvlColorCode(listBucket)
+    btn.ilvlFS:SetText(code .. listBucket.avgIlvl .. "|r")
   else
     btn.ilvlFS:SetText("|cFF666666?|r")
   end
@@ -678,7 +765,7 @@ local function CreateMainWindow()
   f:SetClampedToScreen(true)
   f:Hide()
 
-  -- ButtonFrameTemplate provides: f.TitleContainer.TitleText, f.PortraitContainer.portrait, f.CloseButton
+  -- PortraitFrameTemplate provides: f.TitleContainer.TitleText, f.PortraitContainer.portrait, f.CloseButton
   f.TitleContainer.TitleText:SetText(GI.NAME_MARKUP)
   f.PortraitContainer:Hide()
   -- Replace portrait corner with standard metal corner
@@ -1129,15 +1216,10 @@ function GI.ShowCharacterGear(charKey)
   local specSlots  = specBucket and specBucket.slots
 
   -- Character info line (class, level, avg ilvl, last update)
-  local ready = GI.IsIlvlReady(charKey)
-  local ilvlPart
+  local ilvlPart = ""
   if specBucket and specBucket.avgIlvl ~= nil then
-    local marker = not ready and " |cFF666666~|r" or ""
-    ilvlPart = "  " .. string.format(L["CHAR_AVG_ILVL"], IlvlColorCode(specBucket) .. specBucket.avgIlvl .. "|r") .. marker
-  elseif not ready then
-    ilvlPart = "  |cFF666666...|r"
-  else
-    ilvlPart = ""
+    ilvlPart = "  " .. string.format(L["CHAR_AVG_ILVL"],
+      IlvlColorCode(specBucket) .. specBucket.avgIlvl .. "|r")
   end
   local agePart = "  |cFF888888" .. FormatAge(specBucket and specBucket.lastUpdate) .. "|r"
   w.charInfoFS:SetFormattedText(
@@ -1149,6 +1231,18 @@ function GI.ShowCharacterGear(charKey)
 
   for _, row in ipairs(gearRows) do row:Hide() end
 
+  if GI.TraceEnabled() then
+    local cold, total = 0, 0
+    for _, slot in ipairs(GI.GEAR_SLOTS) do
+      local item = specSlots and specSlots["s" .. slot.id]
+      if item then
+        total = total + 1
+        if not ItemNameNow(item) then cold = cold + 1 end
+      end
+    end
+    GI.Trace("show %s: %d of %d slots cold", charKey, cold, total)
+  end
+
   for i, slot in ipairs(GI.GEAR_SLOTS) do
     local row  = GetOrCreateGearRow(i)
     local item = specSlots and specSlots["s" .. slot.id]
@@ -1157,30 +1251,34 @@ function GI.ShowCharacterGear(charKey)
       row.itemData = item
       row.itemLink = item.link
 
-      row.iconT:SetTexture(item.icon or EMPTY_SLOT_ICON[slot.id])
-      row.iconT:SetAlpha(item.cached == false and 0.45 or 1.0)
-
-      local qr, qg, qb = QColor(item.quality or 1)
-
       -- Resolved from the client rather than stored: a saved name would be in
       -- the language of whoever scanned the item, and an imported character
       -- would show it verbatim -- unreadable in a client whose font has no
       -- glyphs for that script.
-      row.nameFS:SetText(C_Item.GetItemInfo(item.link or item.id) or L["ITEM_LOADING"])
-      if item.cached == false then
-        row.nameFS:SetTextColor(0.5, 0.5, 0.5)
-      else
+      --
+      -- Anything the client cannot produce yet is requested here and draws as
+      -- "Loading..."; the load result redraws the panel with the real name.
+      local itemName = ItemNameNow(item)
+      if not itemName then
+        AwaitItem(item, charKey)
+      end
+
+      row.iconT:SetTexture(item.icon or EMPTY_SLOT_ICON[slot.id])
+      row.iconT:SetAlpha(itemName and 1.0 or 0.45)
+
+      local qr, qg, qb = QColor(item.quality or 1)
+
+      row.nameFS:SetText(itemName or L["ITEM_LOADING"])
+      if itemName then
         row.nameFS:SetTextColor(qr, qg, qb)
+      else
+        row.nameFS:SetTextColor(0.5, 0.5, 0.5)
       end
 
       -- iLvl badge on icon — colored by item quality
       if (item.ilvl or 0) > 0 then
         row.ilvlFS:SetText(tostring(item.ilvl))
-        if not ready then
-          row.ilvlFS:SetTextColor(0.45, 0.45, 0.45)
-        else
-          row.ilvlFS:SetTextColor(qr, qg, qb)
-        end
+        row.ilvlFS:SetTextColor(qr, qg, qb)
       else
         row.ilvlFS:SetText("")
       end
@@ -1279,10 +1377,12 @@ end
 
 -- ─── Public: Toggle Window ────────────────────────────────────────────────────
 
--- Returns true if no visible same-strata frame of meaningful size has a higher
--- frame level than ours (i.e. nothing is covering the window).
--- Tracks whether the window was brought up by our toggle.
--- Reset by OnHide (X button, Escape) so the next toggle always shows+raises.
+-- Shows the window, building it on the first call, or hides it if it is already
+-- up. Opening is skipped in combat.
+--
+-- On the way up it warms tooltip data for every saved character, so the first
+-- hover over a socket is not an empty tooltip, then restores the previous
+-- selection -- or the played character, when there was no previous one.
 function GI.ToggleMainWindow()
   if not GI.mainWindow then
     CreateMainWindow()
@@ -1294,6 +1394,10 @@ function GI.ToggleMainWindow()
     if InCombatLockdown() then return end
     w:Show()
     w:Raise()
+    -- No warm-up here. The client cache is filled once at login and stays
+    -- filled for the session, so re-queueing every slot on each open would only
+    -- flash the rows grey and the names through "Loading..." again.
+    --
     -- Prefetch tooltip data for all saved characters so gem icons are ready on first hover
     if GI.db and GI.db.characters then
       for _, d in pairs(GI.db.characters) do
@@ -1334,7 +1438,9 @@ GI.OnCharacterDataUpdated = function(charKey)
   if not w or not w:IsShown() then return end
   GI.RefreshCharacterList()
   if GI.RefreshCharJumpBtn then GI.RefreshCharJumpBtn() end
-  if charKey == selectedKey then
+  -- charKey is optional: a batched redraw passes it only when the selected
+  -- character was one of the ones that changed. Both being nil is not a match.
+  if charKey and charKey == selectedKey then
     GI.ShowCharacterGear(charKey)
   end
 end
