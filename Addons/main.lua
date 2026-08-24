@@ -101,6 +101,47 @@ function GI.RaceIconMarkup(race, sex, size)
   return "|A:" .. atlas .. ":" .. size .. ":" .. size .. "|a "
 end
 
+-- ─── Circular Icons ──────────────────────────────────────────────────────────
+-- Race and specialization portraits are drawn the same way throughout: a square
+-- icon rounded off by a mask, sitting inside a ring. Both halves live here so
+-- the six places that draw one cannot drift apart.
+
+-- Rounds a texture off with the portrait mask. Returns the mask, which callers
+-- rarely need -- the texture keeps working on its own.
+function GI.MaskCircle(parent, tex)
+  local mask = parent:CreateMaskTexture()
+  mask:SetAllPoints(tex)
+  mask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  tex:AddMaskTexture(mask)
+  return mask
+end
+
+-- A framed circular icon, returned unanchored with .icon and .border on it.
+-- The caller places the frame and gives .icon its texture or atlas; .border
+-- takes SetVertexColor wherever the ring carries a class colour.
+--
+-- The texture coordinates trim the border baked into most icon art, which is
+-- what stops the mask cutting through a visible frame.
+function GI.CreateCircleIcon(parent, size, borderSize)
+  borderSize = borderSize or size + 2
+
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetSize(size, size)
+
+  local icon = f:CreateTexture(nil, "ARTWORK")
+  icon:SetAllPoints()
+  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  GI.MaskCircle(f, icon)
+
+  local border = f:CreateTexture(nil, "OVERLAY")
+  border:SetSize(borderSize, borderSize)
+  border:SetPoint("CENTER")
+  border:SetAtlas(GI.ATLAS.RACE_BORDER)
+
+  f.icon, f.border = icon, border
+  return f
+end
+
 -- Returns the display name and icon of a specialization.
 -- GetSpecializationInfoByID yields an empty string, not nil, for a spec that has
 -- no name — the placeholder one a character carries before choosing a real spec.

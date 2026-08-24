@@ -440,30 +440,6 @@ local function ReleaseIcons(tooltip)
   pool.usedRows, pool.usedRules = 0, 0
 end
 
--- Race and spec icons share the look: a masked circle inside a ring. Only the
--- race ring is class-coloured; the spec one is left as the art ships.
-local function CreateCircle(parent, size)
-  local f = CreateFrame("Frame", nil, parent)
-  f:SetSize(size, size)
-
-  local icon = f:CreateTexture(nil, "ARTWORK")
-  icon:SetAllPoints()
-  icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-  local mask = f:CreateMaskTexture()
-  mask:SetAllPoints(icon)
-  mask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-  icon:AddMaskTexture(mask)
-
-  local border = f:CreateTexture(nil, "OVERLAY")
-  border:SetSize(size + 2, size + 2)
-  border:SetPoint("CENTER")
-  border:SetAtlas(GI.ATLAS.RACE_BORDER)
-
-  f.icon, f.border = icon, border
-  return f
-end
-
 local function AcquireRow(tooltip)
   local pool = GetPool(tooltip)
   pool.usedRows = pool.usedRows + 1
@@ -480,7 +456,8 @@ local function AcquireRow(tooltip)
   f.levelFS:SetJustifyH("RIGHT")
   f.levelFS:SetPoint("LEFT", f, "LEFT", 0, 0)
 
-  f.race = CreateCircle(f, RACE_ICON_SIZE)
+  -- Only the race ring is class-coloured; the spec one is left as it ships.
+  f.race = GI.CreateCircleIcon(f, RACE_ICON_SIZE)
   f.race:SetPoint("LEFT", f.levelFS, "RIGHT", COL_GAP, 0)
 
   f.factionTex = f:CreateTexture(nil, "OVERLAY")
@@ -494,7 +471,7 @@ local function AcquireRow(tooltip)
   f.trackFS:SetJustifyH("RIGHT")
 
   f.arrowTex = f:CreateTexture(nil, "OVERLAY")
-  f.spec     = CreateCircle(f, RACE_ICON_SIZE)
+  f.spec     = GI.CreateCircleIcon(f, RACE_ICON_SIZE)
 
   pool.rows[pool.usedRows] = f
   return f

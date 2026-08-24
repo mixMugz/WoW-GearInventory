@@ -522,26 +522,11 @@ local function CharList_CharButton(btn, nodeArg)
     sel:Hide()
     btn.selBg = sel
 
-    local raceFrame = CreateFrame("Frame", nil, btn)
-    raceFrame:SetSize(22, 22)
+    local raceFrame = GI.CreateCircleIcon(btn, 22, 24)
     raceFrame:SetPoint("LEFT", 12, 0)
 
-    local raceIcon = raceFrame:CreateTexture(nil, "ARTWORK")
-    raceIcon:SetAllPoints()
-    raceIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-    local raceMask = raceFrame:CreateMaskTexture()
-    raceMask:SetAllPoints(raceIcon)
-    raceMask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    raceIcon:AddMaskTexture(raceMask)
-
-    local raceBorder = raceFrame:CreateTexture(nil, "OVERLAY")
-    raceBorder:SetSize(24, 24)
-    raceBorder:SetPoint("CENTER")
-    raceBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
-
-    btn.raceIcon   = raceIcon
-    btn.raceBorder = raceBorder
+    btn.raceIcon   = raceFrame.icon
+    btn.raceBorder = raceFrame.border
     btn.raceFrame  = raceFrame
 
     -- Level badge over race portrait (bottom-left, z-order above border)
@@ -927,20 +912,16 @@ local function CreateMainWindow()
   cjBg:SetPoint("CENTER")
   cjBg:SetColorTexture(0, 0, 0, 1)
 
-  local cjBgMask = charJumpBtn:CreateMaskTexture()
-  cjBgMask:SetAllPoints(cjBg)
-  cjBgMask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-  cjBg:AddMaskTexture(cjBgMask)
+  GI.MaskCircle(charJumpBtn, cjBg)
 
   local cjIcon = charJumpBtn:CreateTexture(nil, "ARTWORK")
   cjIcon:SetSize(22, 22)
   cjIcon:SetPoint("CENTER")
   cjIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-  local cjMask = charJumpBtn:CreateMaskTexture()
-  cjMask:SetAllPoints(cjIcon)
-  cjMask:SetTexture(GI.TEX.PORTRAIT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-  cjIcon:AddMaskTexture(cjMask)
+  -- Textures sit on the button rather than in a GI.CreateCircleIcon frame: the
+  -- pressed state nudges the icon a pixel, which a wrapper would absorb.
+  GI.MaskCircle(charJumpBtn, cjIcon)
 
   -- Border stays fixed; recolored gold on hover via OnEnter/OnLeave
   local cjBorder = charJumpBtn:CreateTexture(nil, "OVERLAY")

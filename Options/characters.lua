@@ -298,25 +298,10 @@ local function BuildCharPanel()
           cb:SetSize(SPEC_CB_W, SPEC_CB_W)
           cb:SetScale(SPEC_CB_SCALE)
 
-          local specFrame = CreateFrame("Frame", nil, row)
-          specFrame:SetSize(SPEC_ICON_W, SPEC_ICON_W)
-          -- anchor set in data population every time (not here)
+          -- Anchor set during data population, not here.
+          local specFrame = GI.CreateCircleIcon(row, SPEC_ICON_W, 16)
 
-          local icon = specFrame:CreateTexture(nil, "ARTWORK")
-          icon:SetAllPoints()
-          icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-          local specMask = specFrame:CreateMaskTexture()
-          specMask:SetAllPoints(icon)
-          specMask:SetTexture(GI.TEX.PORTRAIT_MASK,
-            "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-          icon:AddMaskTexture(specMask)
-
-          local specBorder = specFrame:CreateTexture(nil, "OVERLAY")
-          specBorder:SetSize(16, 16)
-          specBorder:SetPoint("CENTER")
-          specBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
-
-          row.specSlots[i] = { icon = icon, frame = specFrame, cb = cb }
+          row.specSlots[i] = { icon = specFrame.icon, frame = specFrame, cb = cb }
         end
 
         -- Level, right-aligned in a fixed zone so the numbers line up down the list
@@ -328,23 +313,10 @@ local function BuildCharPanel()
         row.lvlFS = lvlFS
 
         -- Race icon
-        local raceFrame = CreateFrame("Frame", nil, row)
-        raceFrame:SetSize(14, 14)
+        local raceFrame = GI.CreateCircleIcon(row, 14, 16)
         raceFrame:SetPoint("LEFT", lvlFS, "RIGHT", 5, 0)
-        local raceIcon = raceFrame:CreateTexture(nil, "ARTWORK")
-        raceIcon:SetAllPoints()
-        raceIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        local raceMask = raceFrame:CreateMaskTexture()
-        raceMask:SetAllPoints(raceIcon)
-        raceMask:SetTexture(GI.TEX.PORTRAIT_MASK,
-          "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        raceIcon:AddMaskTexture(raceMask)
-        local raceBorder = raceFrame:CreateTexture(nil, "OVERLAY")
-        raceBorder:SetSize(16, 16)
-        raceBorder:SetPoint("CENTER")
-        raceBorder:SetAtlas(GI.ATLAS.RACE_BORDER)
-        row.raceIcon   = raceIcon
-        row.raceBorder = raceBorder
+        row.raceIcon   = raceFrame.icon
+        row.raceBorder = raceFrame.border
         row.raceFrame  = raceFrame
 
         -- Faction icon
@@ -575,23 +547,8 @@ local function GetOrCreatePicker()
     local btn = CreateFrame("Button", nil, picker)
     btn:SetSize(PICKER_BTN_SIZE, PICKER_BTN_SIZE)
 
-    local iconFrame = CreateFrame("Frame", nil, btn)
-    iconFrame:SetSize(24, 24)
+    local iconFrame = GI.CreateCircleIcon(btn, 24, 26)
     iconFrame:SetPoint("CENTER", 0, 6)
-
-    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:SetAllPoints()
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    local mask = iconFrame:CreateMaskTexture()
-    mask:SetAllPoints(icon)
-    mask:SetTexture(GI.TEX.PORTRAIT_MASK,
-      "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    icon:AddMaskTexture(mask)
-
-    local border = iconFrame:CreateTexture(nil, "OVERLAY")
-    border:SetSize(26, 26)
-    border:SetPoint("CENTER")
-    border:SetAtlas(GI.ATLAS.RACE_BORDER)
 
     -- Glow under icon
     local glow = iconFrame:CreateTexture(nil, "BACKGROUND")
@@ -610,7 +567,7 @@ local function GetOrCreatePicker()
     btn:SetScript("OnEnter", function() glow:Show() apex:Show() end)
     btn:SetScript("OnLeave", function() glow:Hide() apex:Hide() end)
 
-    btn.icon = icon
+    btn.icon = iconFrame.icon
     picker.specBtns[i] = btn
   end
 
