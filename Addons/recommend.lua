@@ -758,8 +758,12 @@ local function ShouldShow(tooltip)
   if mode == "always" then return true end
   if tooltip ~= GameTooltip then return true end
 
+  -- GI.ApplyDefaults resets an unknown mode at load, so this cannot normally
+  -- be nil. Guarded anyway: it is the one place a stored setting turns straight
+  -- into a function call, and a nil here would be an error rather than a
+  -- setting behaving oddly.
   local isDown = SHOW_MODIFIER[mode]
-  if not isDown then return true end  -- unrecognised setting: fail open
+  if not isDown then return true end
   return isDown()
 end
 

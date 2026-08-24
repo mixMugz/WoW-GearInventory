@@ -416,7 +416,7 @@ local function ScanCharacterGear(isLoginScan)
       specSlots[skey] = nil
     else
       local itemLink = GetInventoryItemLink("player", slot.id)
-      local name, _, quality, ilvl, _, _, _, _, _, _, _, _, _, _, expacID = C_Item.GetItemInfo(itemLink or itemID)
+      local name, _, quality, ilvl = C_Item.GetItemInfo(itemLink or itemID)
 
       if name then
         -- Effective ilvl priority:
@@ -449,7 +449,6 @@ local function ScanCharacterGear(isLoginScan)
           ilvl    = effectiveIlvl,
           quality = finalQ,
           icon    = C_Item.GetItemIconByID(itemID),
-          expac   = expacID,
           cached  = true,
         }
         if isLoginScan then
@@ -525,6 +524,7 @@ function GI.WarmUpAllCharacters()
             -- Upgrade track is derived on demand now; drop the values persisted
             -- by older versions so saved data matches the documented schema.
             slot.upTrack, slot.upCur, slot.upMax, slot.upRank = nil, nil, nil, nil
+            slot.expac = nil
             local itemID = slot.id
             if itemID then
               local slotID = tonumber(skey:sub(2))
@@ -676,9 +676,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
       local skey       = "s" .. pending.slotID
       local slotData   = specSlots and specSlots[skey]
       local lookupKey  = (slotData and slotData.id == itemID and slotData.link) or itemID
-      local name, link, quality, ilvl, _, _, _, _, _, _, _, _, _, _, expacID = C_Item.GetItemInfo(lookupKey)
+      local name, link, quality, ilvl = C_Item.GetItemInfo(lookupKey)
       if not name then
-        name, link, quality, ilvl, _, _, _, _, _, _, _, _, _, _, expacID = C_Item.GetItemInfo(itemID)
+        name, link, quality, ilvl = C_Item.GetItemInfo(itemID)
       end
       if name then
         if charData and specSlots then
@@ -713,7 +713,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
             end
             slot.icon    = C_Item.GetItemIconByID(itemID) or slot.icon
             slot.cached  = true
-            slot.expac   = expacID or slot.expac
             -- FetchAvgIlvl() returns the current player's value only — skip for other chars.
             local myKey = GI.PlayerKey()
             if pending.charKey == myKey then

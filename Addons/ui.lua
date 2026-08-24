@@ -1169,7 +1169,6 @@ function GI.ShowCharacterGear(charKey)
   -- Character info line (class, level, avg ilvl, last update)
   local ready = GI.IsIlvlReady(charKey)
   local ilvlPart
-  local avgIlvl = (specBucket and specBucket.avgIlvl) or 0
   if specBucket and specBucket.avgIlvl ~= nil then
     local marker = not ready and " |cFF666666~|r" or ""
     ilvlPart = "  " .. string.format(L["CHAR_AVG_ILVL"], IlvlColorCode(specBucket) .. specBucket.avgIlvl .. "|r") .. marker
@@ -1192,8 +1191,6 @@ function GI.ShowCharacterGear(charKey)
     local row  = GetOrCreateGearRow(i)
     local item = specSlots and specSlots["s" .. slot.id]
 
-    row.slotData = slot
-    row.avgIlvl  = avgIlvl
     if item then
       row.itemData = item
       row.itemLink = item.link

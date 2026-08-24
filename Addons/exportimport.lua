@@ -225,8 +225,6 @@ end
 -- (the played character, whose other specs were folded in), skipped, charKey
 -- (single-char only), writtenKeys (list of all written charKeys)
 function GI.ApplyImport(importType, data, skipExisting)
-  if not GI.db or not GI.db.characters then return 0, 0, 0 end
-
   local myKey = GI.PlayerKey()
   local count, overwritten, merged, skipped = 0, 0, 0, 0
   local writtenKeys = {}

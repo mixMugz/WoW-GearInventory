@@ -608,7 +608,6 @@ local function ShowDeletePicker(anchorBtn, charKey)
   local r, g, b     = GI.ClassRGB(ch.class)
   local coloredName = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, displayName)
   local raceMarkup  = GI.RaceIconMarkup(ch.race, ch.sex)
-  local classColor  = string.format("|cFF%02X%02X%02X%%s|r", r*255, g*255, b*255)
 
   -- 0 or 1 spec — go straight to "Are you sure?" without the picker
   if #specs <= 1 then
@@ -619,7 +618,6 @@ local function ShowDeletePicker(anchorBtn, charKey)
   -- 2+ specs — show picker
   local p = GetOrCreatePicker()
   p.charKey         = charKey
-  p.charDisplayName = displayName
   p.coloredName     = coloredName
   p.raceMarkup      = raceMarkup
   p.charClass       = { r = r * 255, g = g * 255, b = b * 255 }

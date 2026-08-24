@@ -136,23 +136,23 @@ local RANK_ILVL_STEP = 3  -- item levels gained per rank inside a track
 
 GI.UPGRADE_TRACKS = {}
 do
+  -- ilvl seeds the ceiling below; it is not kept per rank, because only the
+  -- ceiling is ever compared against.
   local tracks = {
-    { name = "Adventurer", key = "TRACK_ADVENTURER", rank = 1, start = 12817, ilvl = 266, max = 6 },
-    { name = "Veteran",    key = "TRACK_VETERAN",    rank = 2, start = 12825, ilvl = 279, max = 6 },
-    { name = "Champion",   key = "TRACK_CHAMPION",   rank = 3, start = 12833, ilvl = 292, max = 6 },
-    { name = "Hero",       key = "TRACK_HERO",       rank = 4, start = 12841, ilvl = 305, max = 6 },
-    { name = "Myth",       key = "TRACK_MYTH",       rank = 5, start = 12849, ilvl = 318, max = 6 },
+    { key = "TRACK_ADVENTURER", rank = 1, start = 12817, ilvl = 266, max = 6 },
+    { key = "TRACK_VETERAN",    rank = 2, start = 12825, ilvl = 279, max = 6 },
+    { key = "TRACK_CHAMPION",   rank = 3, start = 12833, ilvl = 292, max = 6 },
+    { key = "TRACK_HERO",       rank = 4, start = 12841, ilvl = 305, max = 6 },
+    { key = "TRACK_MYTH",       rank = 5, start = 12849, ilvl = 318, max = 6 },
   }
   for _, t in ipairs(tracks) do
     local ilvlMax = t.ilvl + (t.max - 1) * RANK_ILVL_STEP
     for i = 1, t.max do
       GI.UPGRADE_TRACKS[t.start + i - 1] = {
-        track   = t.name,
         key     = t.key,
         rank    = t.rank,
         cur     = i,
         max     = t.max,
-        ilvl    = t.ilvl + (i - 1) * RANK_ILVL_STEP,
         ilvlMax = ilvlMax,
       }
     end
@@ -171,8 +171,8 @@ local ITEM_BONUS_PATTERN = "item:%d+" .. string.rep(":[^:]*", 11) .. ":(%d+):(.*
 -- Only the first numBonusIDs entries are considered — everything past them is
 -- modifier data, whose values are unrelated to bonusIDs and could otherwise
 -- collide with an upgrade track range by coincidence.
--- Returns the shared GI.UPGRADE_TRACKS entry (track, key, rank, cur, max, ilvl,
--- ilvlMax) or nil. It is shared, so callers must treat it as read-only.
+-- Returns the shared GI.UPGRADE_TRACKS entry (key, rank, cur, max, ilvlMax) or
+-- nil. It is shared, so callers must treat it as read-only.
 function GI.ParseUpgradeTrack(itemLink)
   if not itemLink then return nil end
 
@@ -231,7 +231,7 @@ GI.DB_FIELDS = {
   -- avgIlvlColor is a nested { r, g, b } and is handled separately;
   -- slots is the table below.
   spec      = { "incRecommend", "avgIlvl", "lastUpdate" },
-  slot      = { "id", "link", "ilvl", "quality", "icon", "expac", "cached" },
+  slot      = { "id", "link", "ilvl", "quality", "icon", "cached" },
 }
 
 -- ─── Textures & Atlases ───────────────────────────────────────────────────────
@@ -242,12 +242,11 @@ GI.TEX = {
   MINIMAP            = ADDON_TEX .. "gi_icon_minimap",
   LOGO               = ADDON_TEX .. "gi_logo",
 
-  -- Upgrade progress bar: bronze for the first two ranks, silver for the next
-  -- two, gold for the last two.
+  -- Upgrade progress bar. One filled star and one empty, both silver: the art is
+  -- near enough to greyscale to take a tint, so the rank colour comes from
+  -- SetVertexColor rather than from a texture per colour.
   STAR_EMPTY         = ADDON_TEX .. "star_empty_silver",
-  STAR_FILLED_BRONZE = ADDON_TEX .. "star_filled_bronze",
   STAR_FILLED_SILVER = ADDON_TEX .. "star_filled_silver",
-  STAR_FILLED_GOLD   = ADDON_TEX .. "star_filled_gold",
 
   PORTRAIT_MASK      = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
   MM_HIGHLIGHT       = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight",
@@ -266,8 +265,8 @@ GI.ATLAS = {
 }
 
 -- ─── Default Configuration ────────────────────────────────────────────────────
--- Recursively fills missing keys with default values; never overwrites existing data.
--- Called by Addons/db.lua after GI.db is assigned.
+-- Fills missing keys with defaults, then puts back anything holding a value it
+-- should not. Called by Addons/db.lua once GI.db is assigned.
 
 local function ApplyTable(target, defaults)
   for k, v in pairs(defaults) do
@@ -280,9 +279,56 @@ local function ApplyTable(target, defaults)
   end
 end
 
+-- Settings needing more than a type check. A table lists the values a setting
+-- may hold; a function repairs one instead, returning the corrected value or
+-- nil to fall back to the default. Everything absent here is checked by type,
+-- which is all the booleans need.
+--
+-- Saved variables outlive the build that wrote them: a setting can hold a value
+-- this version dropped -- "shift" was a Show option for a while -- or one edited
+-- in by hand. Repairing at load means the menu always shows what is actually in
+-- force, and nothing downstream has to guard against a value it does not know.
+local CONFIG_VALUES = {
+  sortOrder           = { name = true, class = true, level = true, ilvl = true },
+  secondarySort       = { none = true, name = true, class = true, level = true,
+                          ilvl = true, lastUpdated = true },
+  sortDir             = { asc = true, desc = true },
+  groupBy             = { none = true, realm = true, faction = true, armor = true },
+  recommendShow       = { none = true, always = true, ctrl = true, alt = true },
+  recommendMinQuality = { [2] = true, [3] = true, [4] = true },
+
+  -- An angle around the minimap. Out-of-range values already draw correctly --
+  -- cos and sin do not care about the period -- but 1111 in the saved file
+  -- reads as damage, so it is folded back into a full turn.
+  minimapPos = function(value)
+    if type(value) ~= "number" then return nil end
+    return value % 360
+  end,
+}
+
+local function ValidateTable(target, defaults)
+  for k, default in pairs(defaults) do
+    local value   = target[k]
+    local allowed = CONFIG_VALUES[k]
+
+    if type(allowed) == "function" then
+      local fixed = allowed(value)
+      if fixed == nil then fixed = default end
+      target[k] = fixed
+    elseif allowed then
+      if not allowed[value] then target[k] = default end
+    elseif type(default) == "table" then
+      ValidateTable(target[k], default)
+    elseif type(value) ~= type(default) then
+      target[k] = default
+    end
+  end
+end
+
 function GI.ApplyDefaults()
   if not GI.db then return end
   ApplyTable(GI.db, GI.DEFAULTS)
+  ValidateTable(GI.db.config, GI.DEFAULTS.config)
 end
 
 -- ─── Config Accessors ─────────────────────────────────────────────────────────
