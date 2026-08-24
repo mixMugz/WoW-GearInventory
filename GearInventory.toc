@@ -7,7 +7,7 @@
 ## Version: |cFF888888 12.1.0#0006|r
 ## SavedVariables: GearInventoryDB
 
-## OptionalDeps: LibDataBroker-1.1, LibDBIcon-1.0, Bazooka, SexyMap
+## OptionalDeps: Bazooka, SexyMap
 
 ## X-NOTE: Verify Interface version via: /dump select(4, GetBuildInfo())
 ## X-NOTE: This folder must be named "GearInventory" in Interface/AddOns/

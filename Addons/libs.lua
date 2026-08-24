@@ -1,11 +1,17 @@
 -- GearInventory/Addons/libs.lua
--- Detects optional external libraries that may be loaded before this addon.
--- Sets GI.ldb and GI.dbicon so broker.lua and minimap.lua are library-agnostic.
+-- Picks up the broker libraries and hands them to broker.lua and minimap.lua,
+-- so neither has to know where they came from.
 --
---   GI.ldb    -- LibDataBroker-1.1  (bundled by Bazooka and most LDB displays)
---   GI.dbicon -- LibDBIcon-1.0      (bundled by SexyMap, HandyNotes, and others)
+--   GI.ldb    -- LibDataBroker-1.1
+--   GI.dbicon -- LibDBIcon-1.0
 --
--- Both are nil when the respective library is absent; callers must guard with
+-- Both ship in Libs/ and load from the TOC before this file, so both are
+-- normally present. LibStub hands out whichever copy loaded first, which may
+-- well be another addon's -- that is the point of it, and a newer copy winning
+-- is fine.
+--
+-- Still guarded rather than assumed: an installation missing Libs/ altogether
+-- leaves these nil, and the callers fall back to the manual minimap button.
 --   if GI.ldb then ... end
 
 local addonName, GI = ...
