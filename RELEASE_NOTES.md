@@ -77,6 +77,35 @@
 - Stars sit directly after the label, spaced from it and from each other by one space measured in the label font rather than a guessed pixel gap
 - With colouring off the track name and the rank fall back to yellow, which reads as deliberately plain against the dimmed grey of the line they sit in
 
+### Item Data Loading
+
+- **Every character needed a second click before its gear read properly.** The first click showed `Loading...` in every slot, the second showed the names. The load queue asked the client for items by their ID, while the panel reads names off the saved link — and to the client those are two different things: an ID loads the base item, a link loads the item with its bonuses. Everything is now asked for by link where there is one
+- Items the panel finds cold are waited on through `ItemMixin:ContinueOnItemLoad`, Blizzard's own mechanism, rather than by matching load results against the addon's queue. A result that arrived with no matching queue entry used to leave the row on `Loading...` until something else happened to redraw it
+- `ITEM_DATA_LOAD_RESULT` fires *synchronously* for an item the client already holds, and the event was being registered after the requests went out — so those answers landed nowhere and stranded their queue entries for the rest of the session. Registration now happens before the first request
+- **Fixed saved characters being given the played character's item level.** The load handler read the equipped slot whenever the item ID and slot number matched, without checking who the entry belonged to. An alt holding the same item in the same slot got the player's number written over theirs — upgrading a track moves the bonus ID, not the item ID, so two characters wearing the same piece at different ranks collided. The equipped slot is now only read when the entry belongs to the played character
+- A link captured while its item was still loading carries an empty name and a stand-in quality, and the handler preferred the stored link over the freshly resolved one — so that placeholder was written back and kept. The resolved link wins now
+- **The stored `cached` flag is gone.** It recorded whether the client had the item at scan time, then went into saved variables and claimed "loaded" on the next login while the cache was cold. Whether an item can be read is asked at draw time instead, and the greyed-out average in the character list follows the load queue
+- Changing a full outfit fires `PLAYER_EQUIPMENT_CHANGED` once per slot, and each event started its own timer — sixteen identical whole-character scans in a row. One timer now, pushed back by each event, so the scan runs once after the changes stop
+- A panel opened cold waits on all sixteen slots at once and the client answers them in the same tick. Redraws are collected and run once per batch rather than once per item
+- `/gi trace` toggles a trace of the load path through the chat frame: what a scan reads, what goes into the queue, what each result resolved, and how many slots were cold on a draw. Off by default and deliberately not in the options panel — it is a diagnostic
+
+### Sorting
+
+- **The secondary sort has its own direction.** Both levels shared one Ascending/Descending setting, so a list running item level high to low also ran its tied names Z to A. Secondary defaults to ascending, which is what a name used as a tiebreaker wants
+- `Last Updated` was offered as a primary sort but missing from the config's list of accepted values, so choosing it worked until the next login and then silently reverted to item level
+
+### F.A.Q.
+
+- The panel scrolls, so entries can accumulate past the height of the window. Same scrollbar as the Saved Characters list
+
+### Code Quality
+
+- Shared helpers replace copies: `GI.SpaceWidth`, `GI.SpecList`, `GI.ConfirmDeleteSpec`, and `GI.ColorCode` / `GI.Colorize` / `GI.DisplayName` between them stood in for a space measurement written twice, a spec collection written three times, an identical eight-field popup written twice, nine hand-built colour escapes and five hand-built `Name-Realm` strings
+- The two sort-order lists in one function became one `SORT_OPTIONS`; the secondary list just puts `None` in front of it
+- `GI.GEAR_SLOTS` carries Blizzard's own slot name, so the empty-slot icon map is built from it instead of listing the same sixteen slots a second time
+- `GI.VERSION` is read from the TOC, so a version bump touches one file
+- Five comments described code that is not there: the race icon cache was headed by a description of a different function, the window toggle by frame-level machinery that never existed, and the tooltip renderer claimed to rebuild the sell price it actually drops. The dependency list in `recommend.lua` went stale twice and is now a statement of which files it leans on
+
 ---
 
 ## v12.1.0 `#0005`
