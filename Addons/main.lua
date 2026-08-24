@@ -133,6 +133,47 @@ function GI.PlayerKey()
   return name .. "-" .. realm
 end
 
+-- ─── Tooltip Line Fonts ───────────────────────────────────────────────────────
+-- GameTooltip pools its line FontStrings for the whole session, so a font set
+-- on one is inherited by every later tooltip that reaches the same line index --
+-- Blizzard's own included. Nothing resets it: an explicit SetFont outlives
+-- ClearLines, SetHyperlink and SetUnit alike. So anything that shrinks a line
+-- has to hand it back, and both callers here go through this pair.
+
+local tooltipFonts = {}
+
+-- A font object at the given size, derived from the tooltip's own font so it
+-- keeps the player's face and outline. Cached: the font never changes.
+function GI.TooltipFont(size)
+  local font = tooltipFonts[size]
+  if font then return font end
+
+  font = CreateFont("GearInventoryTooltipFont" .. size)
+  local path, _, flags = GameTooltipText:GetFont()
+  if path then font:SetFont(path, size, flags) end
+
+  tooltipFonts[size] = font
+  return font
+end
+
+local borrowedLines = {}
+
+-- Sets a tooltip line's font and remembers it for GI.RestoreTooltipFonts.
+function GI.SetTooltipLineFont(fs, font)
+  if not fs then return end
+  borrowedLines[#borrowedLines + 1] = fs
+  fs:SetFontObject(font)
+end
+
+-- Hands every borrowed line back to the tooltip's own font object. Cheap to
+-- call when nothing was borrowed, so callers need not track that themselves.
+function GI.RestoreTooltipFonts()
+  for i = #borrowedLines, 1, -1 do
+    borrowedLines[i]:SetFontObject(GameTooltipText)
+    borrowedLines[i] = nil
+  end
+end
+
 -- ─── Chat Output ──────────────────────────────────────────────────────────────
 -- Every addon message goes through here, so the "debug messages" setting can
 -- silence all of them from one place. Output stays on unless explicitly switched

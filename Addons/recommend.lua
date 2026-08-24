@@ -411,29 +411,10 @@ local RULE_INSET       = 10  -- how far the rule stops short of the tooltip edge
 
 local pools = {}
 
--- FontStrings whose font we replaced, and must hand back. GameTooltip reuses its
--- lines between tooltips: leave one shrunk and the next tooltip inherits it.
-local shrunkLines = {}
-
 -- A line carrying nothing but a rule does not need full line height, and that
 -- height is the only thing setting the distance between the rule and the text
--- above and below it. Built at runtime so the size stays a number we can tune.
-local ruleFont
-
-local function RuleFont()
-  if ruleFont then return ruleFont end
-  ruleFont = CreateFont("GearInventoryRuleFont")
-  local path, _, flags = GameTooltipText:GetFont()
-  if path then ruleFont:SetFont(path, 6, flags) end
-  return ruleFont
-end
-
-local function RestoreLines()
-  for i = #shrunkLines, 1, -1 do
-    shrunkLines[i]:SetFontObject(GameTooltipText)
-    shrunkLines[i] = nil
-  end
-end
+-- above and below it.
+local RULE_FONT_SIZE = 6
 
 local function GetPool(tooltip)
   local pool = pools[tooltip]
@@ -444,14 +425,14 @@ local function GetPool(tooltip)
       for i = 1, #pool.rows  do pool.rows[i]:Hide()  end
       for i = 1, #pool.rules do pool.rules[i]:Hide() end
       pool.usedRows, pool.usedRules = 0, 0
-      RestoreLines()
+      GI.RestoreTooltipFonts()
     end)
   end
   return pool
 end
 
 local function ReleaseIcons(tooltip)
-  RestoreLines()
+  GI.RestoreTooltipFonts()
   local pool = pools[tooltip]
   if not pool then return end
   for i = 1, #pool.rows  do pool.rows[i]:Hide()  end
@@ -560,8 +541,7 @@ local function AddRule(tooltip)
   local fs = _G[tooltip:GetName() .. "TextLeft" .. tooltip:NumLines()]
   if not fs then return end
 
-  fs:SetFontObject(RuleFont())
-  shrunkLines[#shrunkLines + 1] = fs
+  GI.SetTooltipLineFont(fs, GI.TooltipFont(RULE_FONT_SIZE))
 
   local r = AcquireRule(tooltip)
   r:ClearAllPoints()

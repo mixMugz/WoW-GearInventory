@@ -341,11 +341,12 @@ local function RenderItemTooltip(tooltip, link)
         lr, lg, lb,
         0.35, 0.35, 0.35
       )
-      local rightFS = _G[tooltip:GetName() .. "TextRight" .. tooltip:NumLines()]
-      if rightFS then
-        local font, _, flags = rightFS:GetFont()
-        rightFS:SetFont(font, 9, flags)
-      end
+      -- The item ID rides along in small type. Registered rather than set
+      -- outright: this is GameTooltipTextRight1, which every other tooltip in
+      -- the session shares.
+      GI.SetTooltipLineFont(
+        _G[tooltip:GetName() .. "TextRight" .. tooltip:NumLines()],
+        GI.TooltipFont(9))
     elseif ltype == Enum.TooltipDataLineType.SellPrice then
       -- Deliberately rendered as nothing: sell price is noise in a gear tooltip.
     elseif line.rightText and line.rightText ~= "" then
@@ -411,6 +412,7 @@ local function GetOrCreateGearRow(idx)
   iconBtn:SetScript("OnLeave", function()
     suppressCompare = false
     ColorTipBorder(1, 1, 1)
+    GI.RestoreTooltipFonts()
     GameTooltip:Hide()
   end)
   row.iconBtn = iconBtn
