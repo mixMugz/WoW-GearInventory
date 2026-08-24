@@ -51,22 +51,44 @@ function GI.ClassDisplayName(class, sex)
 end
 
 -- ─── Class Armor Types ───────────────────────────────────────────────────────
--- Static mapping: class token → armor proficiency (highest wearable type).
+-- Class token → armor proficiency, as an Enum.ItemArmorSubclass value so the
+-- name can come from the game rather than from a word written here.
+--
+-- Written out because the client does not expose the mapping: everything under
+-- "Armor" in the API is either damage mitigation or IsItemPreferredArmorType,
+-- which answers only for the player and needs a real item location. Blizzard
+-- hardcodes the same thing in Lua where it needs it -- see
+-- classDefaultProfessionMap in Blizzard_GlueXML/CharacterServices.lua, which is
+-- cruder still: it lumps leather and mail together and has no Evoker.
+--
+-- Ordered by armor type, then by class, so a missing entry is easy to spot.
+local ARMOR = Enum.ItemArmorSubclass
+
 GI.CLASS_ARMOR = {
-  WARRIOR     = "Plate",
-  PALADIN     = "Plate",
-  DEATHKNIGHT = "Plate",
-  HUNTER      = "Mail",
-  SHAMAN      = "Mail",
-  EVOKER      = "Mail",
-  ROGUE       = "Leather",
-  DRUID       = "Leather",
-  MONK        = "Leather",
-  DEMONHUNTER = "Leather",
-  MAGE        = "Cloth",
-  WARLOCK     = "Cloth",
-  PRIEST      = "Cloth",
+  MAGE        = ARMOR.Cloth,
+  PRIEST      = ARMOR.Cloth,
+  WARLOCK     = ARMOR.Cloth,
+
+  DEMONHUNTER = ARMOR.Leather,
+  DRUID       = ARMOR.Leather,
+  MONK        = ARMOR.Leather,
+  ROGUE       = ARMOR.Leather,
+
+  EVOKER      = ARMOR.Mail,
+  HUNTER      = ARMOR.Mail,
+  SHAMAN      = ARMOR.Mail,
+
+  DEATHKNIGHT = ARMOR.Plate,
+  PALADIN     = ARMOR.Plate,
+  WARRIOR     = ARMOR.Plate,
 }
+
+-- Localised name of a class's armor type, for the group-by-armor header.
+function GI.ClassArmorName(class)
+  local subclass = GI.CLASS_ARMOR[class]
+  if not subclass then return nil end
+  return C_Item.GetItemSubClassInfo(Enum.ItemClass.Armor, subclass)
+end
 
 -- ─── Upgrade Tracks (Midnight Season 2) ──────────────────────────────────────
 -- BonusID → { track (EN), rank (1=lowest), cur, max }

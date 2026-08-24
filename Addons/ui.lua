@@ -132,7 +132,7 @@ local function GetGroupKey(data, groupBy)
     -- own table does not carry -- it holds Horde and Alliance only.
     return FACTION_LABELS_FROM_STRING[ch.faction] or FACTION_NEUTRAL or ch.faction
   end
-  if groupBy == "armor"   then return GI.CLASS_ARMOR[ch.class] or "Unknown" end
+  if groupBy == "armor"   then return GI.ClassArmorName(ch.class) or "Unknown" end
 end
 
 -- Colour used when the track or rank colouring is switched off. Not white: the
