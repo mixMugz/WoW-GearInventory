@@ -7,19 +7,124 @@ local L = GI.L
 
 -- ─── Layout Constants ─────────────────────────────────────────────────────────
 
-local DEFAULT_W   = 500
+local DEFAULT_W   = 550
+local FIXED_H     = 600
 local CHAR_LIST_W = 180
 
-local BODY_TOP_Y  = -30  -- just below title bar (no portrait)
-local BODY_BOT_Y  = 12   -- bottom inset
-local CHAR_ROW_H        = 28
-local GROUP_HEADER_H    = 14
-local GEAR_ROW_H        = 28
-local INFO_H            = 58   -- char info block + ITEMS label + gaps
+-- Insets from the border art, written in the border's own units. The border
+-- scales separately from the window, so they are converted before use -- see
+-- GI.ApplyMainWindowScale.
+local TITLE_H    = 30  -- depth of the title bar
+local BODY_INSET = 6   -- left, right and bottom
 
--- Fixed height: title + info block + gear rows + bottom inset.
-local FIXED_H = -BODY_TOP_Y + INFO_H
-              + #GI.GEAR_SLOTS * GEAR_ROW_H + BODY_BOT_Y
+local CHAR_ROW_H     = 28
+local GROUP_HEADER_H = 14
+local GEAR_ROW_H     = 28
+
+-- Gap above the character list, and the gear list's own right inset.
+local CHAR_LIST_TOP_PAD = 4
+local GEAR_RIGHT_PAD    = 8
+
+-- How far the info panel stops short of the border art on the sides: the kerb of
+-- the NineSlice, in the border's units. Its top stops at the title bar, whose
+-- height is asked of the widget rather than guessed -- the template sets it.
+local PANEL_EDGE = 3
+
+-- The gear list's own height, and the gap the ITEMS label keeps above it. The
+-- info panel is measured against both: it stops clear of the label rather than
+-- swallowing it.
+local GEAR_LIST_H      = #GI.GEAR_SLOTS * GEAR_ROW_H
+local ITEMS_LABEL_GAP  = 4
+local PANEL_ITEMS_GAP  = 2  -- between the panel's bottom edge and the label
+
+-- TEMPORARY. A flat colour standing in for the artwork that goes here later; it
+-- is up mainly so the zone's edges are visible while the block is being laid
+-- out. Strong enough to read as a shape, weak enough that the class-coloured
+-- name still carries over it.
+local INFO_BG_ALPHA = 0.30
+
+-- FIXED_H is a stated number, not a sum of its parts: the title bar's depth is
+-- measured in the border's units and does not add up with the rest. Whatever it
+-- leaves over lands between the character info block and the gear list, which is
+-- where art is going later -- the list itself is pinned to the bottom edge.
+
+-- ─── Window Scale ─────────────────────────────────────────────────────────────
+-- The window is two frames that scale apart from each other.
+--
+--   The base carries the size and everything in it. It follows the interface
+--   slider, but bounded: never so small that a unit is worth less than
+--   MIN_UNIT_PX, never so tall that it covers more than MAX_SCREEN_SHARE of the
+--   screen. Between the bounds it takes a scale of 1 and behaves like any other
+--   window in the game.
+--
+--   The border is laid over the base, anchored corner to corner rather than
+--   sized, so it takes the window's dimensions and answers to the slider alone.
+--   Neither bound applies to it: the bounds exist to keep the window a usable
+--   size, and the border is not the window -- it is art stretched across
+--   whatever size the window came out at.
+--
+-- The bounds are not equal partners. The ceiling wins outright, because a window
+-- hanging over the edge of the screen is no use however sharply it is drawn; the
+-- floor applies only in the room the ceiling leaves. A unit below a pixel is
+-- what 1920x1080 at a 65% slider produces, and detail starts falling through the
+-- grid there -- which is what these two frames were built to stop.
+local MIN_UNIT_PX      = 1.4
+local MAX_SCREEN_SHARE = 0.9
+
+-- The base frame's own scale, and the effective scale that produces.
+local function BoundedScale()
+  local _, screenH = GetPhysicalScreenSize()
+  local slider     = UIParent:GetEffectiveScale()
+
+  local floorScale   = MIN_UNIT_PX * 768 / screenH
+  local ceilingScale = MAX_SCREEN_SHARE * 768 / FIXED_H
+
+  -- Floor first, ceiling last: wherever the two disagree, the ceiling is the one
+  -- left standing.
+  local effective = math.min(math.max(slider, floorScale), ceilingScale)
+  return effective / slider, effective
+end
+
+-- Rescales both frames and re-inset the body between them. Called at creation
+-- and whenever the slider or the resolution moves.
+function GI.ApplyMainWindowScale()
+  local f = GI.mainWindow
+  if not f then return end
+
+  local own, effective = BoundedScale()
+  f:SetScale(own)
+
+  local chromeScale = UIParent:GetEffectiveScale()
+  f.chrome:SetScale(chromeScale)
+
+  -- Insets are written against the border art, in the border's units, so they
+  -- are converted into the base's before being handed over: an offset is read in
+  -- the units of the frame being anchored.
+  local k = chromeScale / effective
+  f.body:ClearAllPoints()
+  f.body:SetPoint("TOPLEFT",     f, "TOPLEFT",      BODY_INSET * k, -TITLE_H * k)
+  f.body:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -BODY_INSET * k, BODY_INSET * k)
+
+  -- The info panel goes tight against the border instead, so its corners are
+  -- measured off the art: the title bar's own height on top, the NineSlice kerb
+  -- on the sides. Everything else about it is layout, in the base's units --
+  -- where the character list ends, how tall the gear list is, where the ITEMS
+  -- label sits above it.
+  local titleH = f.chrome.TitleContainer:GetHeight()
+  if not titleH or titleH <= 0 then titleH = TITLE_H end
+
+  -- A font string measures as zero until it has been laid out, which is what an
+  -- unshown frame reports, so the label falls back to its own point size.
+  local labelH = f.itemsLabel:GetHeight()
+  if not labelH or labelH <= 0 then labelH = select(2, f.itemsLabel:GetFont()) or 12 end
+
+  local left   = BODY_INSET * k + (CHAR_LIST_W - 18) + 2 + (f.sbHalf or 0)
+  local bottom = BODY_INSET * k + GEAR_LIST_H + ITEMS_LABEL_GAP + labelH + PANEL_ITEMS_GAP
+
+  f.infoPanel:ClearAllPoints()
+  f.infoPanel:SetPoint("TOPLEFT",     f, "TOPLEFT",      left,          -titleH * k)
+  f.infoPanel:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -PANEL_EDGE * k, bottom)
+end
 
 -- ─── Empty Slot Icons ─────────────────────────────────────────────────────────
 -- GetInventorySlotInfo(slotName) returns (slotID, emptyTexture) — same icons as
@@ -207,8 +312,17 @@ local PLAIN_R, PLAIN_G, PLAIN_B = 1, 0.82, 0
 
 -- Rank star bar. The silver art is close enough to greyscale to tint cleanly:
 -- SetVertexColor multiplies, so a coloured base would muddy every hue.
-local STAR_SIZE   = 6
+local STAR_SIZE   = 7
 local LEAD_SPACES = 2  -- spaces between the label and the first star
+
+-- Ranks not yet earned are drawn as a dimmed copy of the filled star rather than
+-- from the outline art: at this size the outline is a hairline, and on a 1080p
+-- UI scale it lands under a pixel and all but disappears. A dimmed silhouette
+-- keeps the bar's shape readable at any scale. Left silver rather than tinted
+-- with the rank colour: an unearned rank has no colour to carry, and a dimmed
+-- one only reads as a duller version of the ranks beside it.
+local STAR_EMPTY_DIM   = 0.30
+local STAR_EMPTY_ALPHA = 0.85
 
 -- Gap between the label and the bar, and between stars: one space in the label
 -- font, so the bar is spaced exactly like the words in front of it.
@@ -242,12 +356,13 @@ local function LayoutRankStars(row, n, cur, r, g, b)
       else
         star:ClearAllPoints()
         star:SetPoint("LEFT", row.slotFS, "LEFT", offset + (i - 1) * (STAR_SIZE + gap), 0)
+        star:SetTexture(GI.TEX.STAR)
         if i <= cur then
-          star:SetTexture(GI.TEX.STAR_FILLED_SILVER)
           star:SetVertexColor(r, g, b)
+          star:SetAlpha(1)
         else
-          star:SetTexture(GI.TEX.STAR_EMPTY)
-          star:SetVertexColor(1, 1, 1)
+          star:SetVertexColor(STAR_EMPTY_DIM, STAR_EMPTY_DIM, STAR_EMPTY_DIM)
+          star:SetAlpha(STAR_EMPTY_ALPHA)
         end
         star:Show()
       end
@@ -321,6 +436,9 @@ local gearRows       = {}
 local selectedKey    = nil
 local collapsedGroups = {}
 local lvlFontSize     = nil  -- computed once from "00" on first render
+
+-- Width the item level column falls back to when its own text cannot be measured.
+local ILVL_COL_FALLBACK_W = 28
 
 -- ─── Tooltip Helpers ─────────────────────────────────────────────────────────
 
@@ -620,30 +738,40 @@ local function CharList_CharButton(btn, nodeArg)
     lvlRing:SetPoint("CENTER")
     lvlRing:SetAtlas("worldquest-tracker-ring")
 
+    -- Built before the name and realm: both end where this column starts, so
+    -- neither can run under the item level however long the realm is.
+    local ilvlFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ilvlFS:SetPoint("RIGHT", -10, 0)
+    ilvlFS:SetText("0000")
+    -- Four digits wide, or a fallback: an unshown frame measures its strings as
+    -- zero, and a zero-width column would let the name run to the row's edge.
+    local minW = ilvlFS:GetStringWidth()
+    ilvlFS:SetText("")
+    ilvlFS:SetWidth(minW > 0 and minW or ILVL_COL_FALLBACK_W)
+    ilvlFS:SetJustifyH("RIGHT")
+    btn.ilvlFS = ilvlFS
+
     local nameFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     nameFS:SetPoint("LEFT", raceFrame, "RIGHT", 5, 4)
-    nameFS:SetPoint("RIGHT", -30, 0)
+    nameFS:SetPoint("RIGHT", ilvlFS, "LEFT", -4, 0)
     nameFS:SetJustifyH("LEFT")
     nameFS:SetWordWrap(false)
     btn.nameFS = nameFS
 
+    -- Realm reads as a subtitle, so its size is taken from the name's own font
+    -- rather than from the small font object: locales ship their own sizes for
+    -- both, and a fixed offset from the small one lands almost on the name in
+    -- some of them. Never wrapped -- the row has no second line to wrap into,
+    -- so a realm too wide for the column is truncated instead.
+    local nFont, nSize, nFlags = nameFS:GetFont()
     local realmFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    local rFont, rSize = realmFS:GetFont()
-    realmFS:SetFont(rFont, rSize - 2)
+    realmFS:SetFont(nFont, math.max(8, math.floor(nSize * 0.72)), nFlags)
     realmFS:SetPoint("TOPLEFT", nameFS, "BOTTOMLEFT", 0, 0)
-    realmFS:SetPoint("RIGHT", -30, 0)
+    realmFS:SetPoint("RIGHT", ilvlFS, "LEFT", -4, 0)
     realmFS:SetJustifyH("LEFT")
+    realmFS:SetWordWrap(false)
     realmFS:SetTextColor(0.45, 0.45, 0.45)
     btn.realmFS = realmFS
-
-    local ilvlFS = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ilvlFS:SetPoint("RIGHT", -10, 0)
-    ilvlFS:SetText("0000")
-    local minW = ilvlFS:GetStringWidth()
-    ilvlFS:SetText("")
-    ilvlFS:SetWidth(minW)
-    ilvlFS:SetJustifyH("RIGHT")
-    btn.ilvlFS = ilvlFS
 
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
@@ -751,35 +879,58 @@ end
 
 -- ─── Main Window Creation ─────────────────────────────────────────────────────
 
+-- Base frame first, border laid over it, body between the two.
+--
+-- The base is a plain frame: it owns the size, the position and the name, so
+-- Escape and every GI.mainWindow reader still reach the window itself. The
+-- border is the templated frame, anchored to the base's corners rather than
+-- sized -- it inherits the window's dimensions and scales on its own. Anything
+-- that belongs to the title bar goes on the border so it keeps pace with the
+-- art; everything else goes in the body, which is inset from the border and
+-- scales with the window.
 local function CreateMainWindow()
-  local f = CreateFrame("Frame", "GearInventoryMainFrame", UIParent, "PortraitFrameTemplate")
+  local f = CreateFrame("Frame", "GearInventoryMainFrame", UIParent)
   f:SetSize(DEFAULT_W, FIXED_H)
   f:SetPoint("CENTER")
   f:SetFrameStrata("HIGH")
   f:SetToplevel(true)
   f:SetMovable(true)
   f:EnableMouse(true)
-  f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", f.StartMoving)
-  f:SetScript("OnDragStop",  f.StopMovingOrSizing)
   f:SetClampedToScreen(true)
   f:Hide()
 
-  -- PortraitFrameTemplate provides: f.TitleContainer.TitleText, f.PortraitContainer.portrait, f.CloseButton
-  f.TitleContainer.TitleText:SetText(GI.NAME_MARKUP)
-  f.PortraitContainer:Hide()
+  local chrome = CreateFrame("Frame", nil, f, "PortraitFrameTemplate")
+  chrome:SetIgnoreParentScale(true)
+  chrome:SetPoint("TOPLEFT",     f, "TOPLEFT")
+  chrome:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT")
+  chrome:SetFrameLevel(f:GetFrameLevel() + 1)
+  chrome:EnableMouse(true)
+  chrome:RegisterForDrag("LeftButton")
+  chrome:SetScript("OnDragStart", function() f:StartMoving() end)
+  chrome:SetScript("OnDragStop",  function() f:StopMovingOrSizing() end)
+  f.chrome = chrome
+
+  local body = CreateFrame("Frame", nil, f)
+  body:SetFrameLevel(chrome:GetFrameLevel() + 5)
+  f.body = body
+
+  -- PortraitFrameTemplate provides: chrome.TitleContainer.TitleText,
+  -- chrome.PortraitContainer.portrait, chrome.CloseButton
+  chrome.TitleContainer.TitleText:SetText(GI.NAME_MARKUP)
+  chrome.PortraitContainer:Hide()
   -- Replace portrait corner with standard metal corner
-  f.NineSlice.TopLeftCorner:SetAtlas(GI.ATLAS.WINDOW_CORNER_TL, true)
+  chrome.NineSlice.TopLeftCorner:SetAtlas(GI.ATLAS.WINDOW_CORNER_TL, true)
   -- Extend title bar to fill the space freed by the hidden portrait
-  f.TitleContainer:ClearAllPoints()
-  f.TitleContainer:SetPoint("TOPLEFT", 4, 0)
-  f.TitleContainer:SetPoint("TOPRIGHT", -24, 0)
-  f.CloseButton:SetScript("OnClick", function() f:Hide() end)
+  chrome.TitleContainer:ClearAllPoints()
+  chrome.TitleContainer:SetPoint("TOPLEFT", 4, 0)
+  chrome.TitleContainer:SetPoint("TOPRIGHT", -24, 0)
+  -- Closes the window, not the border it sits on
+  chrome.CloseButton:SetScript("OnClick", function() f:Hide() end)
 
   -- Settings gear dropdown (left of CloseButton)
-  local settingsDropdown = CreateFrame("DropdownButton", nil, f, "UIPanelIconDropdownButtonTemplate")
-  settingsDropdown:SetFrameLevel(f.CloseButton:GetFrameLevel() + 2)
-  settingsDropdown:SetPoint("RIGHT", f.CloseButton, "LEFT", -4, 0)
+  local settingsDropdown = CreateFrame("DropdownButton", nil, chrome, "UIPanelIconDropdownButtonTemplate")
+  settingsDropdown:SetFrameLevel(chrome.CloseButton:GetFrameLevel() + 2)
+  settingsDropdown:SetPoint("RIGHT", chrome.CloseButton, "LEFT", -4, 0)
   settingsDropdown:SetupMenu(function(_, rootDescription)
     rootDescription:SetTag("MENU_GI_SETTINGS")
 
@@ -947,11 +1098,13 @@ local function CreateMainWindow()
 
   end)
 
-  -- Character jump button (left side of title bar) — selects the current player's character
-  local charJumpBtn = CreateFrame("Button", nil, f)
+  -- Character jump button (left side of title bar) — selects the current player's
+  -- character. On the border with the rest of the title bar, so it keeps the
+  -- title's scale rather than the window's.
+  local charJumpBtn = CreateFrame("Button", nil, chrome)
   charJumpBtn:SetSize(28, 28)
-  charJumpBtn:SetFrameLevel(f.CloseButton:GetFrameLevel() + 2)
-  charJumpBtn:SetPoint("TOPLEFT", f, "TOPLEFT", -4, 2)
+  charJumpBtn:SetFrameLevel(chrome.CloseButton:GetFrameLevel() + 2)
+  charJumpBtn:SetPoint("TOPLEFT", chrome, "TOPLEFT", -4, 2)
   charJumpBtn:Hide()
 
   local cjBg = charJumpBtn:CreateTexture(nil, "BACKGROUND")
@@ -1029,24 +1182,26 @@ local function CreateMainWindow()
   tinsert(UISpecialFrames, "GearInventoryMainFrame")
 
   -- ── Background ─────────────────────────────────────────────────────────────
-  if f.TopTileStreaks then f.TopTileStreaks:Hide() end
-  f.Bg:Hide()
-  local bgJourneys = f:CreateTexture(nil, "BACKGROUND", nil, -3)
+  -- On the border, along with the rest of the window art: anchored by its edges
+  -- rather than sized, since the border's units are not the window's.
+  if chrome.TopTileStreaks then chrome.TopTileStreaks:Hide() end
+  chrome.Bg:Hide()
+  local bgJourneys = chrome:CreateTexture(nil, "BACKGROUND", nil, -3)
   bgJourneys:SetAtlas(GI.ATLAS.WINDOW_BG)
-  bgJourneys:SetSize(f:GetWidth() - 3, f:GetHeight() - 6)
-  bgJourneys:SetPoint("CENTER", f, "CENTER")
+  bgJourneys:SetPoint("TOPLEFT",      2, -3)
+  bgJourneys:SetPoint("BOTTOMRIGHT", -2,  3)
 
 
   -- ── Left panel: Character list (full height) ───────────────────────────────
 
   -- Store-style: WowScrollBoxList + MinimalScrollBar (auto-hide)
-  local charSF = CreateFrame("Frame", "GICharScrollBox", f, "WowScrollBoxList")
-  charSF:SetPoint("TOPLEFT",    4, BODY_TOP_Y - 4)
-  charSF:SetPoint("BOTTOMLEFT", 4, BODY_BOT_Y)
+  local charSF = CreateFrame("Frame", "GICharScrollBox", body, "WowScrollBoxList")
+  charSF:SetPoint("TOPLEFT",    0, -CHAR_LIST_TOP_PAD)
+  charSF:SetPoint("BOTTOMLEFT", 0, 0)
   charSF:SetWidth(CHAR_LIST_W - 18)
 
-  local charSB = CreateFrame("EventFrame", "GICharScrollBar", f, "MinimalScrollBar")
-  charSB:SetPoint("TOPLEFT",    charSF, "TOPRIGHT",    2, -4)
+  local charSB = CreateFrame("EventFrame", "GICharScrollBar", body, "MinimalScrollBar")
+  charSB:SetPoint("TOPLEFT",    charSF, "TOPRIGHT",    2, -CHAR_LIST_TOP_PAD)
   charSB:SetPoint("BOTTOMLEFT", charSF, "BOTTOMRIGHT", 2,  4)
   charSB:SetScale(0.70)
 
@@ -1071,40 +1226,75 @@ local function CreateMainWindow()
   local rightX = 10  -- offset from charSB right edge
 
   -- Character info block
-  local charNameFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  local charNameFS = body:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   charNameFS:SetPoint("LEFT", charSB, "RIGHT", rightX, 0)
-  charNameFS:SetPoint("TOP", f, "TOP", 0, BODY_TOP_Y - 4)
-  charNameFS:SetPoint("RIGHT", -14, 0)
+  charNameFS:SetPoint("TOP", body, "TOP", 0, -4)
+  charNameFS:SetPoint("RIGHT", -8, 0)
   charNameFS:SetJustifyH("LEFT")
   charNameFS:SetWordWrap(false)
   charNameFS:SetText("|cFF555555" .. L["HINT_SELECT_CHAR"] .. "|r")
   f.charNameFS = charNameFS
 
-  local charInfoFS = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  local charInfoFS = body:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   charInfoFS:SetPoint("TOPLEFT", charNameFS, "BOTTOMLEFT", 0, -2)
-  charInfoFS:SetPoint("RIGHT", -14, 0)
+  charInfoFS:SetPoint("RIGHT", -8, 0)
   charInfoFS:SetJustifyH("LEFT")
   charInfoFS:SetWordWrap(false)
   charInfoFS:SetText("")
   f.charInfoFS = charInfoFS
 
-  -- ITEMS label
-  local itemsLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  itemsLabel:SetPoint("TOPLEFT", charInfoFS, "BOTTOMLEFT", 0, -6)
-  itemsLabel:SetText("|cFF8A6A30" .. L["LABEL_ITEMS"] .. "|r")
-
   -- ── Gear rows container ────────────────────────────────────────────────────
+  -- Anchored to the bottom and sized to its rows rather than stretched down from
+  -- the label above: the slack in the window has to end up in one place, and the
+  -- place for it is above the list, not under it. The body's height moves with
+  -- the border's scale -- a title bar drawn at 0.65 leaves more units behind than
+  -- one drawn at 1.0 -- so anything anchored top-down puts that difference at the
+  -- bottom edge, where it reads as the list floating off the frame.
 
-  local gearSF = CreateFrame("Frame", "GIGearScrollFrame", f)
-  gearSF:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 0, -4)
-  gearSF:SetPoint("RIGHT",  -14, 0)
-  gearSF:SetPoint("BOTTOM", 0, BODY_BOT_Y)
+  local gearSF = CreateFrame("Frame", "GIGearScrollFrame", body)
+  gearSF:SetPoint("BOTTOMLEFT", charSB, "BOTTOMRIGHT", rightX, 0)
+  gearSF:SetPoint("RIGHT", -GEAR_RIGHT_PAD, 0)
+  gearSF:SetHeight(GEAR_LIST_H)
+
+  -- ITEMS label, riding directly above the list
+  local itemsLabel = body:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  itemsLabel:SetPoint("BOTTOMLEFT", gearSF, "TOPLEFT", 0, ITEMS_LABEL_GAP)
+  itemsLabel:SetText("|cFF8A6A30" .. L["LABEL_ITEMS"] .. "|r")
+  f.itemsLabel = itemsLabel
 
   local gearSC = CreateFrame("Frame", "GIGearScrollChild", gearSF)
   gearSC:SetAllPoints()
   f.gearScrollChild = gearSC
 
+  -- Panel behind the character info block, on its own frame between the border
+  -- and the body: the text and icons sit over it, and static art laid on it
+  -- later will too.
+  --
+  -- It claims the whole top-right zone, tight against the border art on the top
+  -- and both sides, and stopping clear of the ITEMS label at the bottom. That is
+  -- why it hangs off the base rather than the body: the body is inset by layout
+  -- numbers, not by the thickness of the border, so anchoring to it left a gap.
+  -- Its corners are placed by GI.ApplyMainWindowScale, which is where the
+  -- border's units get converted.
+  local infoPanel = CreateFrame("Frame", nil, f)
+  infoPanel:SetFrameLevel(chrome:GetFrameLevel() + 2)
+
+  -- Half the scroll bar's drawn width, from the bar itself rather than a guessed
+  -- number: it is scaled down, so half of it is not half of what the template
+  -- says. The panel's left edge runs down its middle.
+  f.sbHalf = (charSB:GetWidth() or 0) * charSB:GetScale() / 2
+
+  -- Flat fill standing in for the artwork that goes here later, which is also
+  -- what makes the zone's edges visible while the block is being laid out.
+  local infoBg = infoPanel:CreateTexture(nil, "BACKGROUND")
+  infoBg:SetAllPoints()
+
+  infoPanel:Hide()
+  f.infoPanel = infoPanel
+  f.infoBg    = infoBg
+
   GI.mainWindow = f
+  GI.ApplyMainWindowScale()
 
   GI.OnConfigChanged = function(key)
     if (key == "colorUpgradeRank" or key == "colorUpgradeTrack"
@@ -1209,6 +1399,10 @@ function GI.ShowCharacterGear(charKey)
   w.charNameFS:SetFormattedText(
     "%s|cFF%02X%02X%02X%s|r%s",
     raceMarkup, rH, gH, bH, ch.name or "?", realmSuffix)
+
+  local fr, fg, fb = GI.FactionRGB(ch.faction)
+  w.infoBg:SetColorTexture(fr, fg, fb, INFO_BG_ALPHA)
+  w.infoPanel:Show()
 
   -- Gear rows
   local specIDKey  = ch.specID or 0
@@ -1371,6 +1565,7 @@ function GI.ClearMainWindowSelection(charKey)
   if w then
     w.charNameFS:SetText("|cFF555555" .. L["HINT_SELECT_CHAR"] .. "|r")
     w.charInfoFS:SetText("")
+    w.infoPanel:Hide()
     for _, row in ipairs(gearRows) do row:Hide() end
   end
 end

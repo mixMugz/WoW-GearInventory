@@ -72,6 +72,19 @@ function GI.DisplayName(ch)
   return (ch.name or "?") .. "-" .. (ch.realm or "?")
 end
 
+-- The same pair where a row carries both in one FontString: the name in class
+-- colour, the realm behind it dimmed. Size cannot vary inside a single string,
+-- so colour is the only way to push the realm back -- and it has to go back,
+-- since at equal weight the realm reads as loudly as the name it repeats down
+-- the whole list.
+local REALM_DIM = "|cFF737373"
+
+function GI.DisplayNameMarkup(ch, r, g, b)
+  local name = GI.Colorize(ch.name or "?", r, g, b)
+  if not ch.realm then return name end
+  return name .. REALM_DIM .. "-" .. ch.realm .. "|r"
+end
+
 -- ─── Race Icons ───────────────────────────────────────────────────────────────
 -- Cached per race+sex: every gear row, tooltip line and options row asks for
 -- the same handful of combinations. Sex comes from UnitSex -- 1 is unknown,
@@ -149,6 +162,14 @@ function GI.FactionAtlas(faction)
   if faction == "Alliance" then return GI.ATLAS.FACTION_ALLIANCE end
   if faction == "Neutral"  then return GI.ATLAS.FACTION_NEUTRAL  end
   return nil
+end
+
+-- Faction tint, falling back to the neutral grey for a faction the table does
+-- not know -- including nil, which is what a character saved before the field
+-- existed reports.
+function GI.FactionRGB(faction)
+  local c = GI.FACTION_COLORS[faction] or GI.FACTION_COLORS.Neutral
+  return c[1], c[2], c[3]
 end
 
 function GI.RaceIconMarkup(race, sex, size)
@@ -753,6 +774,8 @@ eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")   -- left combat
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")  -- entered combat
 eventFrame:RegisterEvent("PLAYER_UNGHOST")         -- revived at the corpse
 eventFrame:RegisterEvent("PLAYER_ALIVE")           -- resurrected without releasing
+eventFrame:RegisterEvent("UI_SCALE_CHANGED")       -- interface scale slider moved
+eventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")   -- resolution or window size changed
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
@@ -779,6 +802,11 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
 
   elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" then
     ScheduleScan()
+
+  elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+    -- The window's own scale is derived from both, so it is recomputed rather
+    -- than kept from login. Does nothing until the window has been built.
+    if GI.ApplyMainWindowScale then GI.ApplyMainWindowScale() end
 
   elseif event == "PLAYER_REGEN_ENABLED"
       or event == "PLAYER_UNGHOST"

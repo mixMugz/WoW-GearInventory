@@ -31,6 +31,7 @@
 - The loot-toast arrow family ships no downward arrow and no red one, so the loss arrow is the orange one flipped and tinted. Orange rather than green: vertex colour multiplies, and green has no red channel to bring up
 - `GI.CLASS_ARMOR`, whose only reader was the group-by-armor header, is now load-bearing
 - **A Pandaren who has not picked a side was shown with the Alliance emblem.** The check was `faction == "Horde" and Horde or Alliance`, so anything that was not Horde fell through to Alliance -- including `Neutral`. Both panels now go through `GI.FactionAtlas`, which gives a neutral character the free-for-all marker from the same icon set — the game itself draws nothing there, but a hole in a column every other row fills reads as a fault. Grouping by faction labels them with the client's own `FACTION_NEUTRAL`
+- The character level in the section is two points under the tooltip's small font. Even that font renders taller than the 10px race circle next to it, which left the least important number on the line as the loudest
 
 ### Import
 
@@ -76,6 +77,27 @@
 - The star bar is drawn as real textures rather than inline markup, so it can be tinted to the same six colours. Inline `|T|t` takes no colour at all; the bar tints the silver art, which is close enough to greyscale that `SetVertexColor` does not muddy the hue
 - Stars sit directly after the label, spaced from it and from each other by one space measured in the label font rather than a guessed pixel gap
 - With colouring off the track name and the rank fall back to yellow, which reads as deliberately plain against the dimmed grey of the line they sit in
+- **Ranks not yet earned were all but invisible.** They were drawn from outline art, which is a hairline at this size — on a 1080p screen at 65% UI scale it lands under a pixel and disappears. An unearned rank is now the same filled star dimmed to silver, so the bar keeps its shape at any scale, and the stars went from 6px to 7px. Dimmed rather than tinted: an unearned rank has no colour of its own to carry
+- The bar is one texture for every state, so the four other star textures — outlines and tints left over from earlier attempts at it — were deleted. The survivor is now `gi_star.tga`, named like the rest of the addon's art
+
+### Main Window — Frame
+
+- **The window is built inside out now, and its border scales apart from its contents.** A plain base carries the size, the position and everything in the window; the bordered frame is laid over it, anchored corner to corner rather than sized, so it takes the window's dimensions instead of setting them. The title bar, its buttons and the background art sit on the border and keep the interface scale; everything else sits in a body inset from it and keeps the window's
+- **The window's own scale is bounded rather than inherited.** It follows the interface slider, except that a unit may not fall below 1.4 pixels and the window may not cover more than 90% of the screen height. Between the two it takes a scale of 1 and behaves like any other window. The ceiling wins where they disagree: a window hanging off the screen is no use however sharply it is drawn
+- The floor is what the whole arrangement is for. At 1920x1080 with the slider at 65% a unit came to 0.91 pixels and the window drew smaller than it is written — hairlines landed under a pixel and outline art disappeared. It draws at 0.996 now, while the border stays at 0.65 with the rest of the interface
+- Recomputed on `UI_SCALE_CHANGED` and `DISPLAY_SIZE_CHANGED`. Without that the frames keep the scales they were given and the engine stretches what is already drawn, which only came right after closing and reopening the window
+- The character info block sits on a panel of its own, between the border and the body: it claims the whole top-right zone — tight against the border on the top and both sides, left as far as the middle of the character list's scroll bar, stopping clear of the ITEMS label at the bottom. Static artwork goes on it, under the window's own text and widgets
+- The window grew to 550x600 units. Its height is a stated number rather than a sum of its parts — the title bar is measured in the border's units and no longer adds up with the rest — so the layout has slack in it, and the gear list is pinned to the bottom edge and sized to its own rows to decide where that slack goes: above the list, between it and the character info block, which is where art is going later. Anchored the other way up the difference collected under the last row instead, and it varied with the scale the border happened to be drawn at
+
+### Main Window — Character List
+
+- **A realm too wide for the row wrapped onto a second line the row has no room for.** The realm is drawn on one line now and truncated when it does not fit
+- Its size comes from the name's own font rather than an offset from the small font object: locales ship their own sizes for both, and on some of them the two ended up near enough to read as one
+- The name and the realm now end where the item level column starts, so neither can run under it
+
+### Saved Characters Panel
+
+- The realm is dimmed behind the class-coloured name instead of sharing its colour. Both live in one `FontString`, where the size cannot vary, so colour is all there is — and at equal weight the realm read as loudly as the name, down every row of the list. The same in the `Upgrades` tooltip section
 
 ### Item Data Loading
 

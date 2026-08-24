@@ -400,10 +400,10 @@ local function BuildCharPanel()
         row.lvlFS:SetText("")
       end
 
-      local nameText = ch.name or "?"
-      if ch.realm then nameText = nameText .. "-" .. ch.realm end
-      row.nameFS:SetText(nameText)
-      row.nameFS:SetTextColor(r, g, b)
+      -- Colour comes from the markup, so the fontstring's own is left neutral --
+      -- it would otherwise tint whatever the markup does not cover.
+      row.nameFS:SetText(GI.DisplayNameMarkup(ch, r, g, b))
+      row.nameFS:SetTextColor(1, 1, 1)
 
       -- LASTUPDATE column
       row.lastUpdFS:ClearAllPoints()

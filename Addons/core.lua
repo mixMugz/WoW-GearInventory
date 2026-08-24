@@ -241,6 +241,19 @@ GI.DB_FIELDS = {
   slot      = { "id", "link", "ilvl", "quality", "icon" },
 }
 
+-- ─── Faction Colours ──────────────────────────────────────────────────────────
+-- Tints for the character info block. Not Blizzard's own PLAYER_FACTION_COLORS:
+-- those are bar colours, saturated enough to fight the text laid over them.
+-- These are the emblem hues taken down to something a wash can be made from.
+--
+-- Neutral is a grey rather than nothing at all: a Pandaren who has not picked a
+-- side still gets a block, and an unfilled one would read as a fault.
+GI.FACTION_COLORS = {
+  Horde    = { 0.65, 0.13, 0.13 },
+  Alliance = { 0.11, 0.26, 0.55 },
+  Neutral  = { 0.72, 0.72, 0.72 },
+}
+
 -- ─── Textures & Atlases ───────────────────────────────────────────────────────
 local ADDON_TEX = "Interface\\AddOns\\GearInventory\\Textures\\"
 
@@ -249,11 +262,10 @@ GI.TEX = {
   MINIMAP            = ADDON_TEX .. "gi_icon_minimap",
   LOGO               = ADDON_TEX .. "gi_logo",
 
-  -- Upgrade progress bar. One filled star and one empty, both silver: the art is
-  -- near enough to greyscale to take a tint, so the rank colour comes from
-  -- SetVertexColor rather than from a texture per colour.
-  STAR_EMPTY         = ADDON_TEX .. "star_empty_silver",
-  STAR_FILLED_SILVER = ADDON_TEX .. "star_filled_silver",
+  -- Upgrade progress bar. One star for the whole bar: the art is near enough to
+  -- greyscale to take a tint, so the rank colour comes from SetVertexColor, and
+  -- an unearned rank is the same star dimmed.
+  STAR               = ADDON_TEX .. "gi_star",
 
   PORTRAIT_MASK      = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
   MM_HIGHLIGHT       = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight",

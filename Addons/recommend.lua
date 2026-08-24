@@ -623,7 +623,7 @@ local function AddRow(tooltip, ch, match, cols, leadLine)
 
   local r, g, b = GI.ClassRGB(ch.class)
   if leadLine then
-    left = left .. GI.Colorize(GI.DisplayName(ch), r, g, b)
+    left = left .. GI.DisplayNameMarkup(ch, r, g, b)
   end
 
   tooltip:AddDoubleLine(left, right, 1, 1, 1, 1, 1, 1)
