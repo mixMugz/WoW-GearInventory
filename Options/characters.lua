@@ -426,16 +426,7 @@ local function BuildCharPanel()
       row.delBtn:SetPoint("CENTER", row, "RIGHT", -(cDW / 2), 0)
 
       -- Spec slots
-      local specs = {}
-      if d.gear then
-        for specID, bucket in pairs(d.gear) do
-          if specID ~= 0 then
-            local _, sIcon = GI.SpecInfo(specID)
-            table.insert(specs, { specID = specID, bucket = bucket, icon = sIcon })
-          end
-        end
-        table.sort(specs, function(a, b2) return a.specID < b2.specID end)
-      end
+      local specs = GI.SpecList(d)
 
       local n = math.min(#specs, MAX_SPECS_IN_ROW)
 
@@ -593,20 +584,11 @@ local function ShowDeletePicker(anchorBtn, charKey)
   local entry = GI.db.characters[charKey]
   local ch    = entry.character or {}
 
-  local specs = {}
-  if entry.gear then
-    for specID, bucket in pairs(entry.gear) do
-      if specID ~= 0 then
-        local specName, sIcon = GI.SpecInfo(specID)
-        table.insert(specs, { specID = specID, icon = sIcon, name = specName or "?" })
-      end
-    end
-    table.sort(specs, function(a, b) return a.specID < b.specID end)
-  end
+  local specs = GI.SpecList(entry)
 
-  local displayName = (ch.name or "?") .. "-" .. (ch.realm or "?")
+  local displayName = GI.DisplayName(ch)
   local r, g, b     = GI.ClassRGB(ch.class)
-  local coloredName = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, displayName)
+  local coloredName = GI.Colorize(displayName, r, g, b)
   local raceMarkup  = GI.RaceIconMarkup(ch.race, ch.sex)
 
   -- 0 or 1 spec — go straight to "Are you sure?" without the picker
@@ -620,7 +602,6 @@ local function ShowDeletePicker(anchorBtn, charKey)
   p.charKey         = charKey
   p.coloredName     = coloredName
   p.raceMarkup      = raceMarkup
-  p.charClass       = { r = r * 255, g = g * 255, b = b * 255 }
 
   local n = math.min(#specs, MAX_SPECS_IN_ROW)
 
@@ -642,27 +623,12 @@ local function ShowDeletePicker(anchorBtn, charKey)
         startX + (i - 1) * (PICKER_BTN_SIZE + PICKER_BTN_GAP), btnY)
       btn.icon:SetTexture(spec.icon)
       btn:SetScript("OnClick", function()
-        local sk          = p.charKey
-        local cName       = p.coloredName
-        local cClass      = p.charClass
+        local sk    = p.charKey
+        local cName = p.coloredName
         ClosePicker()
-        local coloredSpec = string.format("|cFF%02X%02X%02X%s|r",
-          cClass.r, cClass.g, cClass.b, spec.name)
-        local popup = StaticPopup_Show("GEARINVENTORY_DELETE_SPEC", coloredSpec, cName)
-        if popup then
-          local ent = GI.db and GI.db.characters[sk]
-          local ch2 = ent and ent.character or {}
-          popup.data = {
-            charKey     = sk,
-            specID      = spec.specID,
-            specName    = spec.name,
-            specIcon    = spec.icon,
-            race        = ch2.race,
-            sex         = ch2.sex,
-            coloredName = cName,
-            coloredSpec = coloredSpec,
-          }
-        end
+
+        local ent = GI.db and GI.db.characters[sk]
+        GI.ConfirmDeleteSpec(sk, spec, ent and ent.character or {}, cName)
       end)
       btn:Show()
     else

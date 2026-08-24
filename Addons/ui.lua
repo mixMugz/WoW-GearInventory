@@ -26,28 +26,10 @@ local FIXED_H = -BODY_TOP_Y + INFO_H
 -- the character paperdoll frame uses for unequipped slots.
 
 local EMPTY_SLOT_ICON = (function()
-  local map = {
-    [1]  = "HeadSlot",
-    [2]  = "NeckSlot",
-    [3]  = "ShoulderSlot",
-    [15] = "BackSlot",
-    [5]  = "ChestSlot",
-    [9]  = "WristSlot",
-    [10] = "HandsSlot",
-    [6]  = "WaistSlot",
-    [7]  = "LegsSlot",
-    [8]  = "FeetSlot",
-    [11] = "Finger0Slot",
-    [12] = "Finger1Slot",
-    [13] = "Trinket0Slot",
-    [14] = "Trinket1Slot",
-    [16] = "MainHandSlot",
-    [17] = "SecondaryHandSlot",
-  }
   local t = {}
-  for slotID, slotName in pairs(map) do
-    local _, tex = GetInventorySlotInfo(slotName)
-    t[slotID] = tex
+  for _, slot in ipairs(GI.GEAR_SLOTS) do
+    local _, tex = GetInventorySlotInfo(slot.inv)
+    t[slot.id] = tex
   end
   return t
 end)()
@@ -65,7 +47,7 @@ end
 local function IlvlColorCode(charData)
   local c = charData and charData.avgIlvlColor
   if c then
-    return string.format("|cFF%02X%02X%02X", c.r * 255, c.g * 255, c.b * 255)
+    return GI.ColorCode(c.r, c.g, c.b)
   end
   return "|cFFFFFFFF"
 end
@@ -97,11 +79,10 @@ local function GetLastUpdated(data)
 end
 
 -- Returns true/false if a < b by ord, nil if equal (enables primary→secondary chaining).
--- Direction is controlled by the global "sortDir" config: "asc" or "desc".
-local function CompareBy(a, b, ord)
+-- Direction comes in as an argument: the two sort levels each have their own.
+local function CompareBy(a, b, ord, asc)
   local ach = a.data.character or {}
   local bch = b.data.character or {}
-  local asc = GI.Config.Get("sortDir") == "asc"
   if ord == "name" then
     local av, bv = (ach.name or ""), (bch.name or "")
     if av ~= bv then if asc then return av < bv else return av > bv end end
@@ -146,22 +127,7 @@ local STAR_SIZE   = 6
 local LEAD_SPACES = 2  -- spaces between the label and the first star
 
 -- Gap between the label and the bar, and between stars: one space in the label
--- font, so the bar is spaced exactly like the words in front of it. Measured as
--- the difference between two strings rather than from a lone space, which some
--- fonts report as zero width. Cached — the font never changes.
-local spaceW
-
-local function SpaceWidth(fs)
-  if not spaceW then
-    local prev = fs:GetText()
-    fs:SetText("i i")
-    local withGap = fs:GetStringWidth()
-    fs:SetText("ii")
-    spaceW = withGap - fs:GetStringWidth()
-    fs:SetText(prev or "")
-  end
-  return spaceW
-end
+-- font, so the bar is spaced exactly like the words in front of it.
 
 -- Width the bar claims, reserved on the label so text can never run under it.
 local function RankBarWidth(n, gap)
@@ -174,7 +140,7 @@ end
 -- a long slot and track name truncates rather than pushing the bar off the row.
 -- Pass n = 0 to hide the bar.
 local function LayoutRankStars(row, n, cur, r, g, b)
-  local gap, offset = SpaceWidth(row.slotFS), 0
+  local gap, offset = GI.SpaceWidth(row.slotFS), 0
   if n > 0 then
     offset = math.min(row.slotFS:GetStringWidth(), row.slotFS:GetWidth()) + LEAD_SPACES * gap
   end
@@ -213,6 +179,21 @@ local GROUP_BY_OPTIONS = {
   { "realm",   "OPT_GROUP_REALM"   },
   { "faction", "OPT_GROUP_FACTION" },
   { "armor",   "OPT_GROUP_ARMOR"   },
+}
+
+-- Sort orders, in menu order. The secondary list puts "none" in front of the
+-- same set, which is why the set is written once.
+local DIR_OPTIONS = {
+  { "asc",  "OPT_SORT_ASC"  },
+  { "desc", "OPT_SORT_DESC" },
+}
+
+local SORT_OPTIONS = {
+  { "name",        "OPT_SORT_NAME"         },
+  { "class",       "OPT_SORT_CLASS"        },
+  { "level",       "OPT_SORT_LEVEL"        },
+  { "ilvl",        "OPT_SORT_ILVL"         },
+  { "lastUpdated", "OPT_SORT_LAST_UPDATED" },
 }
 
 -- Tooltip recommendation radios. Order is the menu order; the first value of
@@ -588,19 +569,10 @@ local function CharList_CharButton(btn, nodeArg)
         local ch = d.character or {}
 
         MenuUtil.CreateContextMenu(self, function(_, rootDescription)
-          local r, g, b = GI.ClassRGB(ch.class)
-          local hex = string.format("%02X%02X%02X", r*255, g*255, b*255)
-          local coloredName = "|cFF" .. hex .. (ch.name or "?") .. "|r"
+          local coloredName = GI.Colorize(ch.name or "?", GI.ClassRGB(ch.class))
           rootDescription:CreateTitle(coloredName)
 
-          -- Count saved specs
-          local specList = {}
-          if d.gear then
-            for specID in pairs(d.gear) do
-              local specName, specIcon = GI.SpecInfo(specID)
-              specList[#specList + 1] = { specID = specID, name = specName or tostring(specID), icon = specIcon }
-            end
-          end
+          local specList = GI.SpecList(d)
 
           -- Export character
           rootDescription:CreateButton(L["CTX_EXPORT_CHAR"], function()
@@ -618,24 +590,8 @@ local function CharList_CharButton(btn, nodeArg)
             -- Multiple specs: submenu per spec + delete all
             local delSub = rootDescription:CreateButton(L["CTX_DELETE_CHAR"])
             for _, spec in ipairs(specList) do
-              local sid  = spec.specID
-              local sName = spec.name
-              local sIcon = spec.icon
-              delSub:CreateButton(sName, function()
-                local coloredSpec = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, sName)
-                local popup = StaticPopup_Show("GEARINVENTORY_DELETE_SPEC", coloredSpec, coloredName)
-                if popup then
-                  popup.data = {
-                    charKey     = key,
-                    specID      = sid,
-                    specName    = sName,
-                    specIcon    = sIcon,
-                    race        = ch.race,
-                    sex         = ch.sex,
-                    coloredName = coloredName,
-                    coloredSpec = coloredSpec,
-                  }
-                end
+              delSub:CreateButton(spec.name or tostring(spec.specID), function()
+                GI.ConfirmDeleteSpec(key, spec, ch, coloredName)
               end)
             end
             delSub:CreateDivider()
@@ -743,15 +699,22 @@ local function CreateMainWindow()
     -- ── Sort by ───────────────────────────────────────────────────────────────
     local sortSub = rootDescription:CreateButton(L["OPT_SORT_BY"])
 
-    sortSub:CreateTitle(L["OPT_SORT_DIR"])
-    local function dirGetter(v) return GI.Config.Get("sortDir") == v end
-    local function dirSetter(v) GI.Config.Set("sortDir", v) GI.RefreshCharacterList() end
-    sortSub:CreateRadio(L["OPT_SORT_ASC"],  dirGetter, dirSetter, "asc")
-      :SetResponder(function(data, _, _) dirSetter(data) return MenuResponse.Refresh end)
-    sortSub:CreateRadio(L["OPT_SORT_DESC"], dirGetter, dirSetter, "desc")
-      :SetResponder(function(data, _, _) dirSetter(data) return MenuResponse.Refresh end)
+    -- Each level carries its own direction: an item level list running high to
+    -- low still wants the names it falls back on to run A to Z.
+    local function AddDirection(key, isEnabled)
+      sortSub:CreateTitle(L["OPT_SORT_DIR"])
+      local function getter(v) return GI.Config.Get(key) == v end
+      local function setter(v) GI.Config.Set(key, v) GI.RefreshCharacterList() end
+      for _, opt in ipairs(DIR_OPTIONS) do
+        local radio = sortSub:CreateRadio(L[opt[2]], getter, setter, opt[1])
+        radio:SetResponder(function(data)
+          setter(data)
+          return MenuResponse.Refresh
+        end)
+        if isEnabled then radio:SetEnabled(isEnabled) end
+      end
+    end
 
-    sortSub:CreateSpacer()
     sortSub:CreateTitle(L["OPT_SORT_PRIMARY"])
     local function sortGetter(v) return GI.Config.Get("sortOrder") == v end
     local function sortSetter(v)
@@ -761,44 +724,41 @@ local function CreateMainWindow()
       end
       GI.RefreshCharacterList()
     end
-    local primaryKeys = { "name", "class", "level", "ilvl", "lastUpdated" }
-    local primaryLabels = {
-      name        = L["OPT_SORT_NAME"],
-      class       = L["OPT_SORT_CLASS"],
-      level       = L["OPT_SORT_LEVEL"],
-      ilvl        = L["OPT_SORT_ILVL"],
-      lastUpdated = L["OPT_SORT_LAST_UPDATED"],
-    }
-    for _, v in ipairs(primaryKeys) do
-      sortSub:CreateRadio(primaryLabels[v], sortGetter, sortSetter, v)
-        :SetResponder(function(data, _, _)
+    for _, opt in ipairs(SORT_OPTIONS) do
+      sortSub:CreateRadio(L[opt[2]], sortGetter, sortSetter, opt[1])
+        :SetResponder(function(data)
           sortSetter(data)
           return MenuResponse.Refresh
         end)
     end
 
+    AddDirection("sortDir")
+
     sortSub:CreateSpacer()
     sortSub:CreateTitle(L["OPT_SORT_SECONDARY"])
     local function secGetter(v) return GI.Config.Get("secondarySort") == v end
     local function secSetter(v) GI.Config.Set("secondarySort", v) GI.RefreshCharacterList() end
-    local secKeys = {
-      { "none",        L["OPT_SORT_NONE"]         },
-      { "name",        L["OPT_SORT_NAME"]         },
-      { "class",       L["OPT_SORT_CLASS"]        },
-      { "level",       L["OPT_SORT_LEVEL"]        },
-      { "ilvl",        L["OPT_SORT_ILVL"]         },
-      { "lastUpdated", L["OPT_SORT_LAST_UPDATED"] },
-    }
-    for _, opt in ipairs(secKeys) do
-      local radio = sortSub:CreateRadio(opt[2], secGetter, secSetter, opt[1])
-      radio:SetResponder(function(data, _, _)
+    -- An order already used as primary is greyed out here, so the two cannot be
+    -- set to the same thing; "none" is always available.
+    local function AddSecondary(value, label)
+      local radio = sortSub:CreateRadio(label, secGetter, secSetter, value)
+      radio:SetResponder(function(data)
         secSetter(data)
         return MenuResponse.Refresh
       end)
-      if opt[1] ~= "none" then
-        radio:SetEnabled(function() return GI.Config.Get("sortOrder") ~= opt[1] end)
+      if value ~= "none" then
+        radio:SetEnabled(function() return GI.Config.Get("sortOrder") ~= value end)
       end
     end
+
+    AddSecondary("none", L["OPT_SORT_NONE"])
+    for _, opt in ipairs(SORT_OPTIONS) do
+      AddSecondary(opt[1], L[opt[2]])
+    end
+
+    AddDirection("secondarySortDir", function()
+      return GI.Config.Get("secondarySort") ~= "none"
+    end)
 
     -- ── Group by ──────────────────────────────────────────────────────────────
     -- Also reachable by right-clicking a group header in the character list.
@@ -1077,6 +1037,8 @@ function GI.RefreshCharacterList()
 
   local order     = GI.db.config and GI.db.config.sortOrder     or "ilvl"
   local secondary = GI.db.config and GI.db.config.secondarySort or "none"
+  local orderAsc  = GI.Config.Get("sortDir")          == "asc"
+  local secAsc    = GI.Config.Get("secondarySortDir") == "asc"
 
   local sorted = {}
   for key, data in pairs(GI.db.characters) do
@@ -1084,10 +1046,10 @@ function GI.RefreshCharacterList()
   end
 
   table.sort(sorted, function(a, b)
-    local r = CompareBy(a, b, order)
+    local r = CompareBy(a, b, order, orderAsc)
     if r ~= nil then return r end
     if secondary ~= "none" and secondary ~= order then
-      local r2 = CompareBy(a, b, secondary)
+      local r2 = CompareBy(a, b, secondary, secAsc)
       if r2 ~= nil then return r2 end
     end
     return false
@@ -1261,7 +1223,7 @@ function GI.ShowCharacterGear(charKey)
         -- Reserve the bar width first, set the text, then place the bar: it
         -- anchors off the rendered text width, so the order matters.
         -- Separator forced white — the fontstring itself is dimmed grey.
-        local barW = RankBarWidth(starCount, SpaceWidth(row.slotFS))
+        local barW = RankBarWidth(starCount, GI.SpaceWidth(row.slotFS))
         row.slotFS:SetPoint("RIGHT", row.textGroup, "RIGHT", -barW, 0)
         row.slotFS:SetText(L[slot.key] .. " |cFFFFFFFF::|r " .. trackText .. rankText)
         LayoutRankStars(row, starCount, up.cur, rr, rg, rb)
@@ -1386,8 +1348,7 @@ local function CharImportMarkup(charKey)
   if not ch then return "|cFFFFFFFF" .. charKey .. "|r" end
   local r, g, b     = GI.ClassRGB(ch.class)
   local raceIcon    = GI.RaceIconMarkup(ch.race, ch.sex)
-  local nameRealm   = (ch.name or "?") .. "-" .. (ch.realm or "?")
-  return raceIcon .. "|cFF" .. string.format("%02X%02X%02X", r*255, g*255, b*255) .. nameRealm .. "|r"
+  return raceIcon .. GI.Colorize(GI.DisplayName(ch), r, g, b)
 end
 
 -- Exports a single character and opens the copy dialog. Shared by the character

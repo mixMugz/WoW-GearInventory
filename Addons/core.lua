@@ -7,31 +7,38 @@ local addonName, GI = ...
 GI.L = setmetatable({}, { __index = function(_, k) return k end })
 
 -- ─── Version ──────────────────────────────────────────────────────────────────
-GI.VERSION = "12.1.0#0006"
+-- Taken from the TOC so a bump touches one file. The TOC entry is wrapped in
+-- colour markup for Blizzard's addon list; that wrapping is stripped back off.
+local tocVersion = C_AddOns.GetAddOnMetadata(addonName, "Version") or ""
+GI.VERSION = tocVersion:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("%s+", "")
 
 -- The addon name as it is drawn everywhere: window title, chat prefix, tooltips,
 -- broker plate. One copy so the branding cannot drift between them.
 GI.NAME_MARKUP = "|cFF00C9FFGear|r|cFFFFFFFFInventory|r"
 
 -- ─── Equipment Slots ──────────────────────────────────────────────────────────
--- name keys resolve via GI.L (populated by Locales/*.lua after this file loads).
+-- Every slot the addon knows about, in the order the gear list draws them.
+--
+-- key resolves via GI.L (populated by Locales/*.lua after this file loads); inv
+-- is Blizzard's own slot name, which GetInventorySlotInfo turns into the empty
+-- slot artwork. Both live here so the slot list is written once.
 GI.GEAR_SLOTS = {
-  { id = 1,  key = "SLOT_HEAD"      },
-  { id = 2,  key = "SLOT_NECK"      },
-  { id = 3,  key = "SLOT_SHOULDER"  },
-  { id = 15, key = "SLOT_BACK"      },
-  { id = 5,  key = "SLOT_CHEST"     },
-  { id = 9,  key = "SLOT_WRIST"     },
-  { id = 10, key = "SLOT_HANDS"     },
-  { id = 6,  key = "SLOT_WAIST"     },
-  { id = 7,  key = "SLOT_LEGS"      },
-  { id = 8,  key = "SLOT_FEET"      },
-  { id = 11, key = "SLOT_FINGER1"   },
-  { id = 12, key = "SLOT_FINGER2"   },
-  { id = 13, key = "SLOT_TRINKET1"  },
-  { id = 14, key = "SLOT_TRINKET2"  },
-  { id = 16, key = "SLOT_MAINHAND"  },
-  { id = 17, key = "SLOT_OFFHAND"   },
+  { id = 1,  key = "SLOT_HEAD",     inv = "HeadSlot"          },
+  { id = 2,  key = "SLOT_NECK",     inv = "NeckSlot"          },
+  { id = 3,  key = "SLOT_SHOULDER", inv = "ShoulderSlot"      },
+  { id = 15, key = "SLOT_BACK",     inv = "BackSlot"          },
+  { id = 5,  key = "SLOT_CHEST",    inv = "ChestSlot"         },
+  { id = 9,  key = "SLOT_WRIST",    inv = "WristSlot"         },
+  { id = 10, key = "SLOT_HANDS",    inv = "HandsSlot"         },
+  { id = 6,  key = "SLOT_WAIST",    inv = "WaistSlot"         },
+  { id = 7,  key = "SLOT_LEGS",     inv = "LegsSlot"          },
+  { id = 8,  key = "SLOT_FEET",     inv = "FeetSlot"          },
+  { id = 11, key = "SLOT_FINGER1",  inv = "Finger0Slot"       },
+  { id = 12, key = "SLOT_FINGER2",  inv = "Finger1Slot"       },
+  { id = 13, key = "SLOT_TRINKET1", inv = "Trinket0Slot"      },
+  { id = 14, key = "SLOT_TRINKET2", inv = "Trinket1Slot"      },
+  { id = 16, key = "SLOT_MAINHAND", inv = "MainHandSlot"      },
+  { id = 17, key = "SLOT_OFFHAND",  inv = "SecondaryHandSlot" },
 }
 
 -- ─── Class Colors & Display Names ────────────────────────────────────────────
@@ -289,10 +296,12 @@ end
 -- in by hand. Repairing at load means the menu always shows what is actually in
 -- force, and nothing downstream has to guard against a value it does not know.
 local CONFIG_VALUES = {
-  sortOrder           = { name = true, class = true, level = true, ilvl = true },
+  sortOrder           = { name = true, class = true, level = true, ilvl = true,
+                          lastUpdated = true },
   secondarySort       = { none = true, name = true, class = true, level = true,
                           ilvl = true, lastUpdated = true },
   sortDir             = { asc = true, desc = true },
+  secondarySortDir    = { asc = true, desc = true },
   groupBy             = { none = true, realm = true, faction = true, armor = true },
   recommendShow       = { none = true, always = true, ctrl = true, alt = true },
   recommendMinQuality = { [2] = true, [3] = true, [4] = true },
@@ -350,9 +359,10 @@ end
 GI.DEFAULTS = {
   config = {
     dbVersion          = "v1",   -- incremented on breaking schema changes
-    sortOrder          = "ilvl", -- "name" | "class" | "level" | "ilvl"
+    sortOrder          = "ilvl", -- "name" | "class" | "level" | "ilvl" | "lastUpdated"
     secondarySort      = "none", -- "none" | "name" | "class" | "level" | "ilvl" | "lastUpdated"
     sortDir            = "desc", -- "asc" | "desc"
+    secondarySortDir   = "asc",  -- "asc" | "desc", independent of sortDir
     groupBy            = "none", -- "none" | "realm" | "faction" | "armor"
     colorUpgradeTrack  = true,   -- colorize the upgrade track name by its rank
     colorUpgradeRank   = true,   -- colorize the rank bar or text by progress tier

@@ -12,6 +12,52 @@ function GI.ClassRGB(classToken)
   return c and c.r or 1, c and c.g or 1, c and c.b or 1
 end
 
+-- Width of one space in a FontString's own font.
+--
+-- Measured as the difference between two strings rather than from a lone space,
+-- which some fonts report as zero width. Cached per font, because the callers
+-- measure in different ones and a space in a gear row is not a space in a
+-- tooltip. The text is put back, so a live FontString can be used.
+local spaceWidths = {}
+
+function GI.SpaceWidth(fs)
+  local path, size = fs:GetFont()
+  local key = tostring(path) .. ":" .. tostring(size)
+
+  local cached = spaceWidths[key]
+  if cached then return cached end
+
+  local prev = fs:GetText()
+  fs:SetText("i i")
+  local withGap = fs:GetStringWidth()
+  fs:SetText("ii")
+  local width = withGap - fs:GetStringWidth()
+  fs:SetText(prev or "")
+
+  if width <= 0 then width = 4 end
+  spaceWidths[key] = width
+  return width
+end
+
+-- Opening colour escape for an r,g,b triple. Colours are 0-1 floats throughout
+-- the addon while the escape wants bytes, so the conversion lives here rather
+-- than at each call site.
+function GI.ColorCode(r, g, b)
+  return string.format("|cFF%02X%02X%02X", r * 255, g * 255, b * 255)
+end
+
+-- The same, wrapped around a piece of text.
+function GI.Colorize(text, r, g, b)
+  return GI.ColorCode(r, g, b) .. text .. "|r"
+end
+
+-- "Name-Realm" as shown to the player. GI.PlayerKey builds the same shape for
+-- the character being played, but that one keys the database and must not pick
+-- up placeholders.
+function GI.DisplayName(ch)
+  return (ch.name or "?") .. "-" .. (ch.realm or "?")
+end
+
 -- Returns an inline |A:...:14:14|a atlas markup string for a race icon.
 -- UnitSex() values: 1 = unknown, 2 = male, 3 = female.
 -- Strategy:
@@ -152,6 +198,27 @@ function GI.SpecInfo(specID)
   local _, name, _, icon = GetSpecializationInfoByID(specID)
   if name == "" then name = nil end
   return name, icon
+end
+
+-- Every saved specialization of a character, as { specID, bucket, name, icon },
+-- sorted by ID -- pairs() over the gear table has no order, and without sorting
+-- the entries shuffle between openings.
+--
+-- name is nil for the initial specialization a character carries before
+-- choosing one, so each caller puts in whatever suits its own layout.
+function GI.SpecList(charData)
+  local specs = {}
+  if not (charData and charData.gear) then return specs end
+
+  for specID, bucket in pairs(charData.gear) do
+    if specID ~= 0 then
+      local name, icon = GI.SpecInfo(specID)
+      specs[#specs + 1] = { specID = specID, bucket = bucket, name = name, icon = icon }
+    end
+  end
+
+  table.sort(specs, function(a, b) return a.specID < b.specID end)
+  return specs
 end
 
 -- False for the initial spec a character carries before choosing one. That spec
@@ -572,13 +639,40 @@ function GI.DeleteSpec(charKey, specID)
   end
 end
 
+-- Opens the "remove this specialization?" confirmation.
+--
+-- Both entry points -- the character list context menu and the Saved Characters
+-- picker -- come through here, because the dialog reads eight fields off
+-- popup.data and two copies of that table drift apart quietly.
+--
+-- coloredName is passed in rather than built: the context menu heads its popup
+-- with the character name alone, the picker with name and realm.
+function GI.ConfirmDeleteSpec(charKey, spec, ch, coloredName)
+  local specName    = spec.name or "?"
+  local coloredSpec = GI.Colorize(specName, GI.ClassRGB(ch.class))
+
+  local popup = StaticPopup_Show("GEARINVENTORY_DELETE_SPEC", coloredSpec, coloredName)
+  if not popup then return end
+
+  popup.data = {
+    charKey     = charKey,
+    specID      = spec.specID,
+    specName    = specName,
+    specIcon    = spec.icon,
+    race        = ch.race,
+    sex         = ch.sex,
+    coloredName = coloredName,
+    coloredSpec = coloredSpec,
+  }
+end
+
 function GI.ConfirmDeleteCharacter(charKey)
   local d = GI.db and GI.db.characters[charKey]
   if not d then return end
   local ch = d.character or {}
   local r, g, b = GI.ClassRGB(ch.class)
-  local displayName = (ch.name or "?") .. "-" .. (ch.realm or "?")
-  local coloredName = string.format("|cFF%02X%02X%02X%s|r", r*255, g*255, b*255, displayName)
+  local displayName = GI.DisplayName(ch)
+  local coloredName = GI.Colorize(displayName, r, g, b)
   local raceMarkup  = GI.RaceIconMarkup(ch.race, ch.sex)
   local popup = StaticPopup_Show("GEARINVENTORY_DELETE_CHAR", coloredName)
   if popup then

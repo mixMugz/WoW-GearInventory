@@ -357,13 +357,18 @@ end
 
 local measureFS, measureSmallFS
 
-local function TextWidth(text)
+local function MeasureFS()
   if not measureFS then
     measureFS = UIParent:CreateFontString(nil, "ARTWORK", "GameTooltipText")
     measureFS:Hide()
   end
-  measureFS:SetText(text)
-  return measureFS:GetStringWidth()
+  return measureFS
+end
+
+local function TextWidth(text)
+  local fs = MeasureFS()
+  fs:SetText(text)
+  return fs:GetStringWidth()
 end
 
 -- The level is drawn in the small font, so measuring it in the normal one would
@@ -375,18 +380,6 @@ local function SmallTextWidth(text)
   end
   measureSmallFS:SetText(text)
   return measureSmallFS:GetStringWidth()
-end
-
--- Measured as the difference between two strings rather than from a lone space,
--- which some fonts report as zero width. Cached — the font never changes.
-local spaceW
-
-local function SpaceWidth()
-  if not spaceW then
-    spaceW = TextWidth("i i") - TextWidth("ii")
-    if spaceW <= 0 then spaceW = 4 end
-  end
-  return spaceW
 end
 
 -- ─── Row widget pool ──────────────────────────────────────────────────────────
@@ -583,7 +576,7 @@ local function TrackText(track, link)
   local c = ITEM_QUALITY_COLORS[track.rank]
   local name = GI.TrackName(link, track) or L[track.key]
   if not c then return name end
-  return string.format("|cFF%02X%02X%02X%s|r", c.r * 255, c.g * 255, c.b * 255, name)
+  return GI.Colorize(name, c.r, c.g, c.b)
 end
 
 -- One line per matching specialization. The first carries the character; the
@@ -594,7 +587,7 @@ end
 -- levelW and gainW are the widest of each across the whole list, so every line
 -- reserves the same space and the columns land under one another.
 local function AddRow(tooltip, ch, match, cols, leadLine)
-  local gap  = SpaceWidth()
+  local gap  = GI.SpaceWidth(MeasureFS())
 
   local text = string.format(L[GainKey(match.gain)], match.gain)
 
@@ -630,8 +623,7 @@ local function AddRow(tooltip, ch, match, cols, leadLine)
 
   local r, g, b = GI.ClassRGB(ch.class)
   if leadLine then
-    local nameRealm = (ch.name or "?") .. "-" .. (ch.realm or "?")
-    left = left .. string.format("|cFF%02X%02X%02X%s|r", r * 255, g * 255, b * 255, nameRealm)
+    left = left .. GI.Colorize(GI.DisplayName(ch), r, g, b)
   end
 
   tooltip:AddDoubleLine(left, right, 1, 1, 1, 1, 1, 1)
