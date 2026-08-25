@@ -1066,6 +1066,13 @@ local function CreateMainWindow()
 
     rootDescription:CreateSpacer()
 
+    -- ── Window ────────────────────────────────────────────────────────────────
+    rootDescription:CreateCheckbox(
+      L["OPT_HIDE_IN_COMBAT"],
+      function() return GI.Config.Get("hideInCombat") ~= false end,
+      function() GI.Config.Set("hideInCombat", GI.Config.Get("hideInCombat") == false) end
+    )
+
     -- ── Minimap ───────────────────────────────────────────────────────────────
     rootDescription:CreateCheckbox(
       L["OPT_SHOW_MINIMAP"],
@@ -1572,12 +1579,53 @@ end
 
 -- ─── Public: Toggle Window ────────────────────────────────────────────────────
 
--- Shows the window, building it on the first call, or hides it if it is already
--- up. Opening is skipped in combat.
+-- Set while the window is down only because combat put it down, so leaving
+-- combat can tell "the player had it open" from "the player never opened it".
+-- Private to this file; main.lua goes through the two functions below.
+local hiddenByCombat = false
+
+-- Brings the window up and refreshes it. Shared by the toggle and by the
+-- post-combat restore, so the two cannot drift apart.
 --
--- On the way up it warms tooltip data for every saved character, so the first
--- hover over a socket is not an empty tooltip, then restores the previous
--- selection -- or the played character, when there was no previous one.
+-- It warms tooltip data for every saved character, so the first hover over a
+-- socket is not an empty tooltip, then restores the previous selection -- or
+-- the played character, when there was no previous one.
+local function ShowMainWindow()
+  local w = GI.mainWindow
+  w:Show()
+  w:Raise()
+  -- No warm-up here. The client cache is filled once at login and stays
+  -- filled for the session, so re-queueing every slot on each open would only
+  -- flash the rows grey and the names through "Loading..." again.
+  --
+  -- Prefetch tooltip data for all saved characters so gem icons are ready on first hover
+  if GI.db and GI.db.characters then
+    for _, d in pairs(GI.db.characters) do
+      local specID = d.character and d.character.specID
+      local slots  = specID and d.gear and d.gear[specID] and d.gear[specID].slots
+      PrefetchTooltipData(slots)
+    end
+  end
+  GI.RefreshCharacterList()
+  if selectedKey and GI.db and GI.db.characters[selectedKey] then
+    GI.ShowCharacterGear(selectedKey)
+    w.charScrollBox:ScrollToElementDataByPredicate(function(data)
+      return not data.isHeader and data.key == selectedKey
+    end, ScrollBoxConstants.AlignBegin, 0, true)
+  elseif GI.db then
+    local key = GI.PlayerKey()
+    if GI.db.characters[key] then
+      GI.ShowCharacterGear(key)
+      w.charScrollBox:ScrollToElementDataByPredicate(function(data)
+        return not data.isHeader and data.key == key
+      end, ScrollBoxConstants.AlignBegin, 0, true)
+    end
+  end
+end
+
+-- Shows the window, building it on the first call, or hides it if it is already
+-- up. With "hide in combat" on, opening is skipped in combat -- there would be
+-- nothing to see, the window is about to be hidden anyway.
 function GI.ToggleMainWindow()
   if not GI.mainWindow then
     CreateMainWindow()
@@ -1586,39 +1634,36 @@ function GI.ToggleMainWindow()
   local w = GI.mainWindow
 
   if not w:IsShown() then
-    if InCombatLockdown() then return end
-    w:Show()
-    w:Raise()
-    -- No warm-up here. The client cache is filled once at login and stays
-    -- filled for the session, so re-queueing every slot on each open would only
-    -- flash the rows grey and the names through "Loading..." again.
-    --
-    -- Prefetch tooltip data for all saved characters so gem icons are ready on first hover
-    if GI.db and GI.db.characters then
-      for _, d in pairs(GI.db.characters) do
-        local specID = d.character and d.character.specID
-        local slots  = specID and d.gear and d.gear[specID] and d.gear[specID].slots
-        PrefetchTooltipData(slots)
-      end
-    end
-    GI.RefreshCharacterList()
-    if selectedKey and GI.db and GI.db.characters[selectedKey] then
-      GI.ShowCharacterGear(selectedKey)
-      w.charScrollBox:ScrollToElementDataByPredicate(function(data)
-        return not data.isHeader and data.key == selectedKey
-      end, ScrollBoxConstants.AlignBegin, 0, true)
-    elseif GI.db then
-      local key = GI.PlayerKey()
-      if GI.db.characters[key] then
-        GI.ShowCharacterGear(key)
-        w.charScrollBox:ScrollToElementDataByPredicate(function(data)
-          return not data.isHeader and data.key == key
-        end, ScrollBoxConstants.AlignBegin, 0, true)
-      end
-    end
+    if InCombatLockdown() and GI.Config.Get("hideInCombat") ~= false then return end
+    hiddenByCombat = false
+    ShowMainWindow()
   else
+    -- A hand-closed window stays closed when combat ends.
+    hiddenByCombat = false
     w:Hide()
   end
+end
+
+-- ─── Public: Combat Visibility ────────────────────────────────────────────────
+
+-- Called by main.lua on entering combat. Only an open window is remembered:
+-- one that was already down stays down when combat ends.
+function GI.HideMainWindowForCombat()
+  if GI.Config.Get("hideInCombat") == false then return end
+  local w = GI.mainWindow
+  if w and w:IsShown() then
+    hiddenByCombat = true
+    w:Hide()
+  end
+end
+
+-- Called by main.lua on leaving combat. Puts back only what combat took down,
+-- even if the option was switched off mid-fight -- the window was hidden under
+-- the old setting, so it is owed a restore under it too.
+function GI.RestoreMainWindowAfterCombat()
+  if not hiddenByCombat then return end
+  hiddenByCombat = false
+  if GI.mainWindow then ShowMainWindow() end
 end
 
 -- ─── Callback: invoked by main.lua ────────────────────────────────────────────

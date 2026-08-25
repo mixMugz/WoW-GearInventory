@@ -817,12 +817,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2)
     if pendingScan then
       ScheduleScan()
     end
+    -- Combat ended: put the window back if combat was what took it down. Does
+    -- nothing after a rez, which is the other way into this branch.
+    if event == "PLAYER_REGEN_ENABLED" and GI.RestoreMainWindowAfterCombat then
+      GI.RestoreMainWindowAfterCombat()
+    end
 
   elseif event == "PLAYER_REGEN_DISABLED" then
-    -- Entered combat: close main window if open.
-    if GI.mainWindow and GI.mainWindow:IsShown() then
-      GI.mainWindow:Hide()
-    end
+    -- Entered combat: hide the main window, if the option asks for it.
+    if GI.HideMainWindowForCombat then GI.HideMainWindowForCombat() end
 
   elseif event == "ITEM_DATA_LOAD_RESULT" then
     local itemID, success = arg1, arg2

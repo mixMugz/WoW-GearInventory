@@ -376,6 +376,9 @@ GI.DEFAULTS = {
     sortDir            = "desc", -- "asc" | "desc"
     secondarySortDir   = "asc",  -- "asc" | "desc", independent of sortDir
     groupBy            = "none", -- "none" | "realm" | "faction" | "armor"
+    -- true hides the main window while in combat and puts it back afterwards.
+    -- Display only: scanning and item queries are unaffected either way.
+    hideInCombat       = true,
     colorUpgradeTrack  = true,   -- colorize the upgrade track name by its rank
     colorUpgradeRank   = true,   -- colorize the rank bar or text by progress tier
     upgradeRankAsStars = true,   -- rank as a star bar; false shows "3/6" instead

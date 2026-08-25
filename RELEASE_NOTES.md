@@ -88,6 +88,7 @@
 - Recomputed on `UI_SCALE_CHANGED` and `DISPLAY_SIZE_CHANGED`. Without that the frames keep the scales they were given and the engine stretches what is already drawn, which only came right after closing and reopening the window
 - The character info block sits on a panel of its own, between the border and the body: it claims the whole top-right zone — tight against the border on the top and both sides, left as far as the middle of the character list's scroll bar, stopping clear of the ITEMS label at the bottom. Static artwork goes on it, under the window's own text and widgets
 - The window grew to 550x600 units. Its height is a stated number rather than a sum of its parts — the title bar is measured in the border's units and no longer adds up with the rest — so the layout has slack in it, and the gear list is pinned to the bottom edge and sized to its own rows to decide where that slack goes: above the list, between it and the character info block, which is where art is going later. Anchored the other way up the difference collected under the last row instead, and it varied with the scale the border happened to be drawn at
+- **`Hide in combat` is an option now, on by default, and it puts the window back.** Combat used to close the window for good; it now remembers that it was open and reopens it when the fight ends. A window that was already down stays down. Switching the option off leaves the window alone in combat and lets it be opened there. Display only — scanning and item queries never depended on it
 
 ### Main Window — Character List
 
