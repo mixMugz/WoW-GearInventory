@@ -1189,14 +1189,15 @@ local function CreateMainWindow()
   tinsert(UISpecialFrames, "GearInventoryMainFrame")
 
   -- ── Background ─────────────────────────────────────────────────────────────
-  -- On the border, along with the rest of the window art: anchored by its edges
-  -- rather than sized, since the border's units are not the window's.
+  -- On the border, along with the rest of the window art: it takes the border's
+  -- corners exactly, with no inset of its own, so the file is drawn at the
+  -- window's full size and lands pixel for pixel.
   if chrome.TopTileStreaks then chrome.TopTileStreaks:Hide() end
   chrome.Bg:Hide()
-  local bgJourneys = chrome:CreateTexture(nil, "BACKGROUND", nil, -3)
-  bgJourneys:SetAtlas(GI.ATLAS.WINDOW_BG)
-  bgJourneys:SetPoint("TOPLEFT",      2, -3)
-  bgJourneys:SetPoint("BOTTOMRIGHT", -2,  3)
+  local bgArt = chrome:CreateTexture(nil, "BACKGROUND", nil, -3)
+  bgArt:SetTexture(GI.TEX.BG_TEST, "CLAMP", "CLAMP")
+  bgArt:SetAllPoints()
+  f.bgArt = bgArt
 
 
   -- ── Left panel: Character list (full height) ───────────────────────────────

@@ -267,6 +267,10 @@ GI.TEX = {
   -- an unearned rank is the same star dimmed.
   STAR               = ADDON_TEX .. "gi_star",
 
+  -- TEMPORARY. Test artwork for the main window background, drawn at the
+  -- window's own DEFAULT_W x FIXED_H.
+  BG_TEST            = ADDON_TEX .. "gi_bg_test",
+
   PORTRAIT_MASK      = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask",
   MM_HIGHLIGHT       = "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight",
   MM_BG              = "Interface\\Minimap\\UI-Minimap-Background",

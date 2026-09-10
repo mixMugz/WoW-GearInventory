@@ -94,12 +94,32 @@ end
 -- Bind on pickup is the only binding that rules an item out: everything else --
 -- account-bound, warbound, warbound until used, bind on equip -- can still
 -- reach another character.
-local function BindingAllows(data, bindType)
-  local text = BindingLine(data)
-  if text then
-    if ITEM_BIND_ON_PICKUP and text == ITEM_BIND_ON_PICKUP then return false end
-    return true
+--
+-- It is worded two ways, and which one shows depends on whether the item has
+-- been picked up yet: an unowned piece reads ITEM_BIND_ON_PICKUP, one already
+-- in somebody's hands reads ITEM_SOULBOUND. Measured on ruRU: "Becomes
+-- soulbound when picked up" against "Soulbound". Neither wording appears on
+-- account-bound, warbound or plain bind-on-equip gear, so either one is enough
+-- to rule the item out.
+--
+-- Every line is searched, not just the binding line: transmog and illusion
+-- lines push the binding down the tooltip -- on a transmogrified,
+-- illusion-enchanted staff it landed seventh.
+local function IsBound(data)
+  if not (data and data.lines) then return false end
+  for i = 1, #data.lines do
+    local text = data.lines[i].leftText
+    if text and (text == ITEM_BIND_ON_PICKUP or text == ITEM_SOULBOUND) then
+      return true
+    end
   end
+  return false
+end
+
+-- bindType only stands in when the tooltip carries no binding line at all.
+local function BindingAllows(data, bindType)
+  if IsBound(data) then return false end
+  if BindingLine(data) then return true end
   return TRADEABLE_BIND[bindType] == true
 end
 
@@ -745,6 +765,12 @@ local MODIFIER_KEYS = {
 -- rebuilt when a modifier changes — gating that one too would leave the section
 -- permanently out of reach there.
 local function ShouldShow(tooltip)
+  -- Never in combat, whatever the setting says. The section walks every slot of
+  -- every saved character, and a fight is the one moment the frame budget has
+  -- nothing to spare -- the client cuts off addon code that overruns it, and
+  -- whoever is running when the axe falls takes the blame.
+  if InCombatLockdown() then return false end
+
   local mode = GI.Config.Get("recommendShow") or "always"
   if mode == "none"   then return false end
   if mode == "always" then return true end
@@ -762,31 +788,33 @@ end
 -- A tooltip is built once, on hover. Without this, pressing the modifier while
 -- one is already up would do nothing, and releasing it would leave the section
 -- behind — so the mode would only ever work if the key was held beforehand.
+-- Combat is the same case in both directions: the section is suppressed while
+-- fighting, so it has to go away on a tooltip that is already up when a fight
+-- starts, and come back on one still up when it ends.
+--
 -- RefreshDataNextUpdate defers to the next frame and coalesces repeats, which
 -- matters because MODIFIER_STATE_CHANGED fires on both press and release.
-local modFrame = CreateFrame("Frame")
-modFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
-modFrame:SetScript("OnEvent", function(_, _, key)
-  local keys = MODIFIER_KEYS[GI.Config.Get("recommendShow") or ""]
-  if not (keys and keys[key]) then return end
+local function RefreshTooltip()
   if GameTooltip:IsShown() and GameTooltip.RefreshDataNextUpdate then
     GameTooltip:RefreshDataNextUpdate()
   end
+end
+
+local modFrame = CreateFrame("Frame")
+modFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
+modFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+modFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+modFrame:SetScript("OnEvent", function(_, event, key)
+  if event ~= "MODIFIER_STATE_CHANGED" then
+    RefreshTooltip()
+    return
+  end
+  local keys = MODIFIER_KEYS[GI.Config.Get("recommendShow") or ""]
+  if not (keys and keys[key]) then return end
+  RefreshTooltip()
 end)
 
 -- ─── Tooltip hook ─────────────────────────────────────────────────────────────
-
--- True when the tooltip itself says the item is already soulbound. bindType
--- alone cannot tell: a bind-on-equip item still reports OnEquip after somebody
--- has worn it. Account-bound wording is deliberately not matched — those still
--- travel between the player's own characters.
-local function IsSoulbound(data)
-  if not (data and data.lines) then return false end
-  for i = 1, math.min(#data.lines, 6) do
-    if data.lines[i].leftText == ITEM_SOULBOUND then return true end
-  end
-  return false
-end
 
 local function OnItemTooltip(tooltip, data)
   if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then return end
@@ -821,7 +849,7 @@ local function OnItemTooltip(tooltip, data)
   if quality < minQuality then return end
 
   local slotIDs = EQUIP_SLOTS[equipLoc]
-  if not slotIDs or IsSoulbound(data) then return end
+  if not slotIDs then return end
   if GI.Config.Get("recommendIgnoreBoE") == true and IsBindOnEquip(data) then return end
 
   local itemIlvl = C_Item.GetDetailedItemLevelInfo(link)
