@@ -105,6 +105,16 @@ local RACE_ATLAS_TOKEN = {
 -- Atlas name for a race icon. nil only when race itself is nil: the last resort
 -- below builds a name whether or not the atlas exists, because SetAtlas draws
 -- nothing rather than erroring on a name the client does not know.
+--
+-- The engine offers nothing for this. C_CreatureInfo.GetRaceInfo carries only
+-- raceName, clientFileString and raceID, and Blizzard's own code never assembles
+-- a raceicon name anywhere in the UI source, so the name is built by hand.
+--
+-- Exactly two spellings exist, measured with C_Texture.GetAtlasExists on human:
+-- "raceicon128-<token>-<sex>" and "raceicon-<token>-<sex>". A "raceicon64-"
+-- prefix, an underscore spelling and the bare token all answered false. The 128
+-- variant is asked for first -- it scales down to the 14px the rows draw without
+-- softening.
 function GI.RaceAtlas(race, sex)
   if not race then return nil end
 
@@ -113,38 +123,22 @@ function GI.RaceAtlas(race, sex)
     return raceIconCache[cacheKey] ~= "" and raceIconCache[cacheKey] or nil
   end
 
-  local sexStr   = (sex == 3) and "female" or "male"
+  local sexStr     = (sex == 3) and "female" or "male"
   local atlasToken = RACE_ATLAS_TOKEN[race:lower()] or race:lower()
+  local token      = atlasToken .. "-" .. sexStr
 
+  -- GetAtlasExists answers a plain boolean. GetAtlasInfo, which this used to
+  -- call, builds a whole AtlasInfo table per candidate only to be tested for nil.
   local function ValidAtlas(name)
-    return name and C_Texture and C_Texture.GetAtlasInfo
-        and C_Texture.GetAtlasInfo(name) and name or nil
+    return C_Texture and C_Texture.GetAtlasExists and C_Texture.GetAtlasExists(name) and name or nil
   end
 
-  -- 1. Engine-provided atlas (validated)
-  local atlas = GetRaceAtlas and ValidAtlas(GetRaceAtlas(race, sex or 2))
+  local atlas = ValidAtlas("raceicon128-" .. token) or ValidAtlas("raceicon-" .. token)
 
-  -- 2. Manual fallback: try known atlas prefix patterns (validated)
+  -- Last resort: hand back the name unvalidated. C_Texture may not list a race
+  -- added after this build, and SetAtlas draws nothing on a name it does not know.
   if not atlas then
-    local token = atlasToken .. "-" .. sexStr
-    local candidates = {
-      "raceicon128-" .. token,
-      "raceicon64-"  .. token,
-      "raceicon-"    .. token,
-      "raceicon128_" .. atlasToken .. "_" .. sexStr,
-      token,
-    }
-    for _, candidate in ipairs(candidates) do
-      atlas = ValidAtlas(candidate)
-      if atlas then break end
-    end
-  end
-
-  -- 3. Last resort: return best-guess atlas name unconditionally.
-  --    C_Texture.GetAtlasInfo may not list newer race atlases,
-  --    but SetAtlas silently does nothing if the atlas is missing.
-  if not atlas then
-    atlas = "raceicon-" .. atlasToken .. "-" .. sexStr
+    atlas = "raceicon-" .. token
   end
 
   raceIconCache[cacheKey] = atlas or ""

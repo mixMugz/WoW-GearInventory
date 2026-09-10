@@ -204,7 +204,9 @@ local function CeilingOf(ilvl, track)
   return ilvl
 end
 
--- Item level in a slot and its ceiling, or 0, 0 if nothing is there.
+-- Item level in a slot, its ceiling and its upgrade track, or 0, 0, nil if
+-- nothing is there. An empty slot scores as zero deliberately: with nothing to
+-- compare against, anything that fits is an upgrade of its whole item level.
 --
 -- A two-handed weapon leaves the off-hand reading as empty in the saved data,
 -- but nothing can go there without taking the two-hander off. Counted as empty
@@ -219,8 +221,28 @@ local function EquippedLevels(bucket, slotID)
     if TWO_HANDED[equipLoc] then slot = slots.s16 end
   end
 
-  if not (slot and slot.ilvl) then return 0, 0 end
-  return slot.ilvl, CeilingOf(slot.ilvl, GI.GetSlotUpgrade(slot))
+  if not (slot and slot.ilvl) then return 0, 0, nil end
+
+  local track = GI.GetSlotUpgrade(slot)
+  return slot.ilvl, CeilingOf(slot.ilvl, track), track
+end
+
+-- ─── Track comparison ─────────────────────────────────────────────────────────
+-- GI.UPGRADE_TRACKS holds one entry per upgrade step, so Champion 1/6 and
+-- Champion 6/6 are different tables carrying the same rank. Rank is therefore
+-- what identifies a track; the entries themselves never compare equal.
+
+local function SameTrack(a, b)
+  return a ~= nil and b ~= nil and a.rank == b.rank
+end
+
+-- True when the item's track outranks what is worn there. Anything off a track
+-- -- last season's gear, or a piece that never had one -- counts as outranked:
+-- a track is headroom, and gear without one has none left.
+local function TrackOutranks(itemTrack, wornTrack)
+  if not itemTrack  then return false end
+  if not wornTrack  then return true  end
+  return itemTrack.rank > wornTrack.rank
 end
 
 -- Whether the off-hand can take this item at all.
@@ -307,14 +329,30 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
       --
       -- Levels are floored so a half-item-level average never rounds in the
       -- item's favour and reports a gain that is not quite there.
-      local gain, capGain
+      --
+      -- A slot already carrying the same track is skipped outright. The two
+      -- pieces then share a ceiling, so the only thing between them is how far
+      -- each has been pushed -- and that is a bill in upgrade currency, not an
+      -- upgrade: the worn piece reaches the same place for the same price. The
+      -- slot is dropped rather than scored zero, because a swap that buys
+      -- nothing does not deserve a line.
+      local gain, capGain, trackUp
       if SuitsSpec(class, specID, item) then
         if item.twoHand then
           -- One comparison, because it fills both slots at once.
-          local mh, mhCap = EquippedLevels(bucket, 16)
-          local oh, ohCap = EquippedLevels(bucket, 17)
-          gain    = math.floor(item.ilvl    - (mh + oh) / 2)
-          capGain = math.floor(item.ceiling - (mhCap + ohCap) / 2)
+          local mh, mhCap, mhTrack = EquippedLevels(bucket, 16)
+          local oh, ohCap, ohTrack = EquippedLevels(bucket, 17)
+
+          -- Judged against the better-tracked hand: taking both slots means
+          -- beating the stronger of the two, not the more convenient one.
+          local wornTrack = mhTrack
+          if TrackOutranks(ohTrack, mhTrack) then wornTrack = ohTrack end
+
+          if not SameTrack(item.track, wornTrack) then
+            gain    = math.floor(item.ilvl    - (mh + oh) / 2)
+            capGain = math.floor(item.ceiling - (mhCap + ohCap) / 2)
+            trackUp = TrackOutranks(item.track, wornTrack)
+          end
         else
           local candidates = slotIDs
           if item.unique then
@@ -324,14 +362,18 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
           for i = 1, #candidates do
             local slotID = candidates[i]
             if slotID ~= 17 or OffHandAccepts(bucket, item) then
-              local ilvl, cap = EquippedLevels(bucket, slotID)
-              local g = math.floor(item.ilvl    - ilvl)
-              local c = math.floor(item.ceiling - cap)
+              local ilvl, cap, wornTrack = EquippedLevels(bucket, slotID)
 
-              -- A real gain outranks a bigger ceiling: the tooltip leads with
-              -- what the item does today.
-              if not gain or g > gain or (g == gain and c > capGain) then
-                gain, capGain = g, c
+              if not SameTrack(item.track, wornTrack) then
+                local g = math.floor(item.ilvl    - ilvl)
+                local c = math.floor(item.ceiling - cap)
+
+                -- A real gain outranks a bigger ceiling: the tooltip leads with
+                -- what the item does today.
+                if not gain or g > gain or (g == gain and c > capGain) then
+                  gain, capGain = g, c
+                  trackUp       = TrackOutranks(item.track, wornTrack)
+                end
               end
             end
           end
@@ -345,10 +387,14 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
         matches[#matches + 1] = {
           specID   = specID,
           gain     = gain,
-          -- Marked only when the item is behind on item level today. A piece
-          -- that already wins needs no argument made for it, and the marker
-          -- then means one thing only: worse now, further later.
-          potential = gain <= 0 and capGain > 0,
+          -- The track is shown whenever it is a step up on what is worn there,
+          -- whether or not the item also wins on item level today -- a better
+          -- track is a second, separate reason to take the piece, and on a slot
+          -- it already beats it says the lead is not the whole story.
+          --
+          -- It is shown as well when the item is behind today but can be pushed
+          -- past what they have, which is the only argument such a piece has.
+          showTrack = trackUp or (gain <= 0 and capGain > 0),
           isActive  = (specID == activeSpec),
         }
         if not best or gain > best then best = gain end
@@ -712,9 +758,10 @@ local function AddRow(tooltip, ch, match, cols, leadLine)
   f.arrowTex:SetPoint("CENTER", f, "RIGHT", -markerMid, 0)
   f.arrowTex:Show()
 
-  -- The track marker only appears when the item can outgrow what they have --
-  -- on every row it would be noise rather than news.
-  if match.potential and cols.trackW > 0 then
+  -- The track marker appears when the item's track beats what is worn in that
+  -- slot, or when the piece is behind today but can still be pushed past them.
+  -- Not on every row: a track equal to theirs is noise rather than news.
+  if match.showTrack and cols.trackW > 0 then
     f.trackFS:SetWidth(cols.trackW)
     f.trackFS:SetText(cols.trackText)
     f.trackFS:ClearAllPoints()
@@ -902,7 +949,7 @@ local function OnItemTooltip(tooltip, data)
       local match = rows[i].matches[j]
       local gw    = TextWidth(string.format(L[GainKey(match.gain)], match.gain))
       if gw > cols.gainW then cols.gainW = gw end
-      if match.potential and item.track then
+      if match.showTrack and item.track then
         cols.trackW = TextWidth(cols.trackText)
       end
     end
