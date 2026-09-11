@@ -61,6 +61,6 @@ knowing, because both hide things on purpose:
   it is on item level. Both pieces share a ceiling, so the difference is only how many
   ranks each has been given — that is a bill in upgrade currency, not an upgrade.
 
-A blue arrow with a track name marks a piece whose track outranks what the character
-wears there. It sits alongside the item level difference rather than replacing it: a
-better track means the lead will keep growing.
+A blue arrow with a track name marks a piece that is no better than what the character
+wears today, but whose track ceiling goes past theirs. A piece that already wins on item
+level carries no marker — it needs no argument made for it.

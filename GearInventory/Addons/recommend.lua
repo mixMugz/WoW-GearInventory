@@ -236,13 +236,13 @@ local function SameTrack(a, b)
   return a ~= nil and b ~= nil and a.rank == b.rank
 end
 
--- True when the item's track outranks what is worn there. Anything off a track
--- -- last season's gear, or a piece that never had one -- counts as outranked:
--- a track is headroom, and gear without one has none left.
-local function TrackOutranks(itemTrack, wornTrack)
-  if not itemTrack  then return false end
-  if not wornTrack  then return true  end
-  return itemTrack.rank > wornTrack.rank
+-- True when track a outranks track b. Anything off a track -- last season's
+-- gear, or a piece that never had one -- counts as outranked: a track is
+-- headroom, and gear without one has none left.
+local function TrackOutranks(a, b)
+  if not a then return false end
+  if not b then return true  end
+  return a.rank > b.rank
 end
 
 -- Whether the off-hand can take this item at all.
@@ -336,7 +336,7 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
       -- upgrade: the worn piece reaches the same place for the same price. The
       -- slot is dropped rather than scored zero, because a swap that buys
       -- nothing does not deserve a line.
-      local gain, capGain, trackUp
+      local gain, capGain
       if SuitsSpec(class, specID, item) then
         if item.twoHand then
           -- One comparison, because it fills both slots at once.
@@ -351,7 +351,6 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
           if not SameTrack(item.track, wornTrack) then
             gain    = math.floor(item.ilvl    - (mh + oh) / 2)
             capGain = math.floor(item.ceiling - (mhCap + ohCap) / 2)
-            trackUp = TrackOutranks(item.track, wornTrack)
           end
         else
           local candidates = slotIDs
@@ -372,7 +371,6 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
                 -- what the item does today.
                 if not gain or g > gain or (g == gain and c > capGain) then
                   gain, capGain = g, c
-                  trackUp       = TrackOutranks(item.track, wornTrack)
                 end
               end
             end
@@ -387,14 +385,11 @@ local function EvaluateCharacter(item, entry, slotIDs, activeSpecOnly)
         matches[#matches + 1] = {
           specID   = specID,
           gain     = gain,
-          -- The track is shown whenever it is a step up on what is worn there,
-          -- whether or not the item also wins on item level today -- a better
-          -- track is a second, separate reason to take the piece, and on a slot
-          -- it already beats it says the lead is not the whole story.
-          --
-          -- It is shown as well when the item is behind today but can be pushed
-          -- past what they have, which is the only argument such a piece has.
-          showTrack = trackUp or (gain <= 0 and capGain > 0),
+          -- Marked only when the item is not ahead on item level today but can
+          -- be pushed past what they have. A piece that already wins needs no
+          -- argument made for it, and the marker then means one thing only:
+          -- no better now, further later.
+          showTrack = gain <= 0 and capGain > 0,
           isActive  = (specID == activeSpec),
         }
         if not best or gain > best then best = gain end
@@ -758,9 +753,8 @@ local function AddRow(tooltip, ch, match, cols, leadLine)
   f.arrowTex:SetPoint("CENTER", f, "RIGHT", -markerMid, 0)
   f.arrowTex:Show()
 
-  -- The track marker appears when the item's track beats what is worn in that
-  -- slot, or when the piece is behind today but can still be pushed past them.
-  -- Not on every row: a track equal to theirs is noise rather than news.
+  -- The track marker only appears when the item is no better today but can
+  -- outgrow what they have -- on every row it would be noise rather than news.
   if match.showTrack and cols.trackW > 0 then
     f.trackFS:SetWidth(cols.trackW)
     f.trackFS:SetText(cols.trackText)
